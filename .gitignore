@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+.venv
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+
+# YOLO models (large files, download at runtime)
+*.pt
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase
+supabase/.branches
+supabase/.temp

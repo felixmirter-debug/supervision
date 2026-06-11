@@ -1,0 +1,14 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+PyJWT==2.10.1
+supabase==2.10.0
+supervision==0.24.0
+ultralytics==8.3.50
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+httpx==0.28.0
+python-dotenv==1.0.1
+aiofiles==24.1.0
+pytest==8.3.3
+pytest-asyncio==0.24.0
