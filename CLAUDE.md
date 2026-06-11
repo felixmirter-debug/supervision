@@ -45,7 +45,8 @@ supervision/
 
 ## Key Technologies
 
-- **Frontend:** Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Zustand
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Zustand
+- **Package manager:** `pnpm` — usar siempre pnpm para instalar, agregar y ejecutar paquetes del frontend. Nunca usar npm o yarn.
 - **Backend:** FastAPI, Python 3.11+, supervision, ultralytics (YOLOv8), supabase-py
 - **Database:** Supabase (Postgres + Auth + Storage)
 - **Auth:** Supabase Auth en frontend (`@supabase/ssr`), JWT verificado en backend

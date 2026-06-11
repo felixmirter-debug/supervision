@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from typing import Any, Iterable, Optional
+
+import numpy as np
+import supervision as sv
+
+
+Point = tuple[int, int]
+
+
+def summarize_config(config: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not config:
+        return {
+            "zones": 0,
+            "lines": 0,
+            "rois": 0,
+            "confidence": None,
+            "class_filter": [],
+            "mode": None,
+        }
+    return {
+        "zones": len(config.get("zones") or []),
+        "lines": len(config.get("lines") or []),
+        "rois": len(config.get("rois") or []),
+        "confidence": config.get("confidence"),
+        "class_filter": config.get("class_filter") or [],
+        "mode": config.get("mode"),
+    }
+
+
+def _numeric(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def point_to_pixel(raw: Any, width: int, height: int) -> Point:
+    if isinstance(raw, dict):
+        x = _numeric(raw.get("x"))
+        y = _numeric(raw.get("y"))
+    elif isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        x = _numeric(raw[0])
+        y = _numeric(raw[1])
+    else:
+        x, y = 0.0, 0.0
+
+    if 0 <= x <= 1 and 0 <= y <= 1:
+        x *= width
+        y *= height
+
+    px = max(0, min(width - 1, int(round(x)))) if width > 0 else 0
+    py = max(0, min(height - 1, int(round(y)))) if height > 0 else 0
+    return px, py
+
+
+def _raw_points(raw_shape: Any) -> Iterable[Any]:
+    if isinstance(raw_shape, dict):
+        return raw_shape.get("points") or []
+    return raw_shape or []
+
+
+def polygon_to_pixels(raw_shape: Any, width: int, height: int) -> np.ndarray:
+    points = [point_to_pixel(point, width, height) for point in _raw_points(raw_shape)]
+    return np.array(points, dtype=np.int32)
+
+
+def config_polygons(config: dict[str, Any], width: int, height: int, key: str) -> list[np.ndarray]:
+    polygons: list[np.ndarray] = []
+    for raw_shape in config.get(key) or []:
+        polygon = polygon_to_pixels(raw_shape, width, height)
+        if len(polygon) >= 3:
+            polygons.append(polygon)
+    return polygons
+
+
+def first_line(config: dict[str, Any], width: int, height: int) -> tuple[Point, Point] | None:
+    lines = config.get("lines") or []
+    if lines:
+        raw = lines[0]
+        if isinstance(raw, dict):
+            return (
+                point_to_pixel(raw.get("start"), width, height),
+                point_to_pixel(raw.get("end"), width, height),
+            )
+
+    if config.get("line_start") and config.get("line_end"):
+        return (
+            point_to_pixel(config.get("line_start"), width, height),
+            point_to_pixel(config.get("line_end"), width, height),
+        )
+
+    return None
+
+
+def filter_detections(
+    detections: sv.Detections,
+    config: dict[str, Any],
+    names: Optional[dict[int, str]],
+    frame_shape: tuple[int, ...],
+) -> sv.Detections:
+    if len(detections) == 0:
+        return detections
+
+    mask = np.ones(len(detections), dtype=bool)
+
+    confidence = config.get("confidence")
+    if confidence is not None and detections.confidence is not None:
+        mask &= detections.confidence >= float(confidence)
+
+    class_filter = set(config.get("class_filter") or [])
+    if class_filter and detections.class_id is not None and names:
+        class_mask = np.array(
+            [names.get(int(class_id), "") in class_filter for class_id in detections.class_id],
+            dtype=bool,
+        )
+        mask &= class_mask
+
+    h, w = frame_shape[:2]
+    roi_polygons = config_polygons(config, w, h, "rois")
+    if roi_polygons:
+        roi_mask = np.zeros(len(detections), dtype=bool)
+        for polygon in roi_polygons:
+            roi_mask |= sv.PolygonZone(polygon=polygon).trigger(detections=detections)
+        mask &= roi_mask
+
+    return detections[mask]

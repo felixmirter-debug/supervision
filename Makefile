@@ -1,22 +1,30 @@
-.PHONY: dev install backend frontend test-backend type-check-frontend
+ifeq ($(OS),Windows_NT)
+SHELL := cmd.exe
+.SHELLFLAGS := /D /C
+endif
+
+.PHONY: dev stop install backend frontend test-backend type-check-frontend
 
 dev:
 	@echo "Starting backend (port 8000) and frontend (port 3000)..."
-	@start cmd /k "cd backend && uvicorn main:app --reload --port 8000"
-	@start cmd /k "cd frontend && npm run dev"
+	@start "supervision-backend" cmd /k "cd /d backend && python -m uvicorn main:app --reload --port 8000"
+	@start "supervision-frontend" cmd /k "cd /d frontend && pnpm run dev --port 3000"
+
+stop:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-dev.ps1
 
 install:
 	cd backend && pip install -r requirements.txt
-	cd frontend && npm install
+	cd frontend && pnpm install
 
 backend:
-	cd backend && uvicorn main:app --reload --port 8000
+	cd backend && python -m uvicorn main:app --reload --port 8000
 
 frontend:
-	cd frontend && npm run dev
+	cd frontend && pnpm run dev --port 3000
 
 test-backend:
 	cd backend && pytest tests/ -v
 
 type-check-frontend:
-	cd frontend && npx tsc --noEmit
+	cd frontend && pnpm exec tsc --noEmit

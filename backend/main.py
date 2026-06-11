@@ -8,6 +8,9 @@ load_dotenv()
 
 from core.models import load_all_models
 from routers import jobs
+from routers.admin import router as admin_router
+from routers.services import router as services_router
+from routers.stream import router as stream_router
 
 
 @asynccontextmanager
@@ -33,6 +36,9 @@ app.add_middleware(
 )
 
 app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(services_router, prefix="/services", tags=["services"])
+app.include_router(stream_router, prefix="/stream", tags=["stream"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
 
 @app.get("/health")
