@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Progress } from '@/components/ui/progress'
 import { Loader2 } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
 import { getJob } from '@/lib/api'
 import type { Job } from '@/lib/api'
 
 const STATUS_LABEL: Partial<Record<Job['status'], string>> = {
-  processing: 'Procesando video…',
-  confirmed: 'Preparando procesamiento…',
-  estimating: 'Estimando costo…',
+  processing: 'Procesando video...',
+  confirmed: 'Preparando procesamiento...',
+  estimating: 'Estimando costo...',
 }
 
 interface Props {
@@ -32,9 +32,9 @@ export function ProcessingView({ jobId, token, onDone, onFailed }: Props) {
   })
 
   const handleComplete = useCallback(
-    (j: Job) => {
-      if (j.status === 'done') onDone(j)
-      if (j.status === 'failed') onFailed(j)
+    (nextJob: Job) => {
+      if (nextJob.status === 'done') onDone(nextJob)
+      if (nextJob.status === 'failed') onFailed(nextJob)
     },
     [onDone, onFailed]
   )
@@ -45,17 +45,19 @@ export function ProcessingView({ jobId, token, onDone, onFailed }: Props) {
     }
   }, [job, handleComplete])
 
-  const label = job ? (STATUS_LABEL[job.status] ?? 'Procesando…') : 'Iniciando…'
+  const label = job ? (STATUS_LABEL[job.status] ?? 'Procesando...') : 'Iniciando...'
 
   return (
-    <div className="py-12 flex flex-col items-center gap-6 text-center">
-      <Loader2 className="h-12 w-12 animate-spin text-brand" />
-      <div className="space-y-2 w-full max-w-xs">
-        <p className="text-sm font-medium">{label}</p>
-        <Progress value={null} className="h-1.5" />
+    <div className="flex min-h-[520px] flex-col items-center justify-center gap-7 text-center">
+      <div className="vision-grid flex size-28 items-center justify-center rounded-lg border border-brand-border bg-brand-soft">
+        <Loader2 className="h-12 w-12 animate-spin text-brand" />
       </div>
-      <p className="text-xs text-muted-foreground">
-        Procesando con YOLOv8 + supervision. Puedes cerrar esta pestaña y volver luego.
+      <div className="w-full max-w-md space-y-3">
+        <p className="text-2xl font-semibold">{label}</p>
+        <Progress value={null} className="h-2" />
+      </div>
+      <p className="max-w-md text-sm leading-6 text-muted-foreground">
+        Procesando con YOLOv8 + supervision. Puedes cerrar esta pestana y volver luego desde el dashboard.
       </p>
     </div>
   )

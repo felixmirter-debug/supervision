@@ -1,16 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Ban, Coins, ShieldAlert, Users } from 'lucide-react'
 import { Nav } from '@/components/nav'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/auth-store'
-import { useRouter } from 'next/navigation'
 import {
-  listClaims, resolveClaim, listAdminUsers, banUser, unbanUser, adjustCredits,
-  type Claim, type AdminUser,
+  adjustCredits,
+  banUser,
+  listAdminUsers,
+  listClaims,
+  resolveClaim,
+  unbanUser,
+  type AdminUser,
+  type Claim,
 } from '@/lib/api'
 import { formatCredits, formatRelativeDate } from '@/lib/formatters'
 import { toast } from 'sonner'
@@ -23,11 +30,9 @@ export default function AdminPage() {
   const router = useRouter()
   const { session, profile, isLoading } = useAuthStore()
   const qc = useQueryClient()
-
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [userAction, setUserAction] = useState<UserAction | null>(null)
-
   const isAdmin = !!session && profile?.role === 'admin'
   const token = session?.access_token ?? ''
 
@@ -61,7 +66,7 @@ export default function AdminPage() {
     if (userAction === 'ban') await banUser(token, selectedUser.id, reason!)
     if (userAction === 'unban') await unbanUser(token, selectedUser.id)
     if (userAction === 'credits') await adjustCredits(token, selectedUser.id, amount!, description!)
-    toast.success('Acción ejecutada')
+    toast.success('Accion ejecutada')
     qc.invalidateQueries({ queryKey: ['admin-users'] })
     setSelectedUser(null)
     setUserAction(null)
@@ -74,14 +79,35 @@ export default function AdminPage() {
 
   const claims = claimsData?.claims ?? []
   const users = usersData?.users ?? []
+  const bannedUsers = users.filter((user) => user.banned_at).length
 
   return (
     <>
       <Nav />
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <h1 className="text-2xl font-bold">Panel de Admin</h1>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Admin</p>
+          <h1 className="mt-2 text-4xl font-semibold">Control de usuarios y reclamos.</h1>
+        </header>
 
-        <Tabs defaultValue="claims">
+        <section className="mb-6 grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Reclamos abiertos', value: claims.length, icon: ShieldAlert },
+            { label: 'Usuarios', value: users.length, icon: Users },
+            { label: 'Baneados', value: bannedUsers, icon: Ban },
+          ].map((item) => {
+            const Icon = item.icon
+            return (
+              <div key={item.label} className="surface-panel rounded-lg p-5">
+                <Icon className="mb-5 size-5 text-brand" />
+                <p className="font-mono text-3xl">{item.value}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{item.label}</p>
+              </div>
+            )
+          })}
+        </section>
+
+        <Tabs defaultValue="claims" className="surface-panel rounded-lg p-4">
           <TabsList>
             <TabsTrigger value="claims">
               Reclamos{claims.length > 0 && <Badge variant="destructive" className="ml-1.5 text-xs">{claims.length}</Badge>}
@@ -89,59 +115,50 @@ export default function AdminPage() {
             <TabsTrigger value="users">Usuarios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="claims" className="pt-4 space-y-2">
-            {claims.length === 0 && <p className="text-sm text-muted-foreground">Sin reclamos abiertos.</p>}
-            {claims.map((c) => (
-              <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-card/50 px-4 py-3 gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{c.description}</p>
-                  <p className="text-xs text-muted-foreground">{c.type} · {formatRelativeDate(c.created_at)}</p>
+          <TabsContent value="claims" className="pt-4">
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {claims.length === 0 && <p className="p-5 text-sm text-muted-foreground">Sin reclamos abiertos.</p>}
+              {claims.map((claim) => (
+                <div key={claim.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{claim.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{claim.type} · {formatRelativeDate(claim.created_at)}</p>
+                  </div>
+                  <Button size="sm" onClick={() => setSelectedClaim(claim)}>Resolver</Button>
                 </div>
-                <Button size="sm" onClick={() => setSelectedClaim(c)}>Resolver</Button>
-              </div>
-            ))}
+              ))}
+            </div>
           </TabsContent>
 
-          <TabsContent value="users" className="pt-4 space-y-2">
-            {users.map((u) => (
-              <div key={u.id} className="flex items-center justify-between rounded-lg border border-border bg-card/50 px-4 py-3 gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs truncate text-muted-foreground">{u.id}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>{u.role}</Badge>
-                    <span className="text-xs">{formatCredits(u.credits)}</span>
-                    <span className="text-xs text-muted-foreground">{u.total_jobs} jobs</span>
-                    {u.banned_at && <Badge variant="destructive" className="text-xs">Baneado</Badge>}
+          <TabsContent value="users" className="pt-4">
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {users.map((user) => (
+                <div key={user.id} className="grid gap-3 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-xs text-muted-foreground">{user.id}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+                      <span className="inline-flex items-center gap-1 text-xs"><Coins className="size-3 text-brand" />{formatCredits(user.credits)}</span>
+                      <span className="text-xs text-muted-foreground">{user.total_jobs} jobs</span>
+                      {user.banned_at && <Badge variant="destructive" className="text-xs">Baneado</Badge>}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openUserAction(user, 'credits')}>Creditos</Button>
+                    {user.banned_at
+                      ? <Button size="sm" variant="outline" onClick={() => openUserAction(user, 'unban')}>Desbanear</Button>
+                      : <Button size="sm" variant="destructive" onClick={() => openUserAction(user, 'ban')}>Banear</Button>
+                    }
                   </div>
                 </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <Button size="sm" variant="outline" onClick={() => openUserAction(u, 'credits')}>
-                    Créditos
-                  </Button>
-                  {u.banned_at
-                    ? <Button size="sm" variant="outline" onClick={() => openUserAction(u, 'unban')}>Desbanear</Button>
-                    : <Button size="sm" variant="destructive" onClick={() => openUserAction(u, 'ban')}>Banear</Button>
-                  }
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
 
-      <ResolveClaimModal
-        claim={selectedClaim}
-        open={!!selectedClaim}
-        onResolve={handleResolveClaim}
-        onClose={() => setSelectedClaim(null)}
-      />
-      <UserActionsModal
-        user={selectedUser}
-        action={userAction}
-        open={!!selectedUser}
-        onConfirm={handleUserAction}
-        onClose={() => { setSelectedUser(null); setUserAction(null) }}
-      />
+      <ResolveClaimModal claim={selectedClaim} open={!!selectedClaim} onResolve={handleResolveClaim} onClose={() => setSelectedClaim(null)} />
+      <UserActionsModal user={selectedUser} action={userAction} open={!!selectedUser} onConfirm={handleUserAction} onClose={() => { setSelectedUser(null); setUserAction(null) }} />
     </>
   )
 }

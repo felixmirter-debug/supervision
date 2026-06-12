@@ -11,7 +11,7 @@ import {
   createDefaultProcessingConfig,
   summarizeProcessingConfig,
 } from '@/lib/processing-config'
-import type { ConfigurableService, ProcessingConfig } from '@/lib/processing-config'
+import type { AnalysisSegment, ConfigurableService, ProcessingConfig } from '@/lib/processing-config'
 import { toast } from 'sonner'
 import { ZoneEditor } from './ZoneEditor'
 import { LineEditor } from './LineEditor'
@@ -24,6 +24,7 @@ interface Props {
   estimate: EstimateResult
   token: string
   initialConfig: ProcessingConfig | null
+  analysisSegment: AnalysisSegment | null
   onContinue: (config: ProcessingConfig) => void
   onCancel: () => void
 }
@@ -37,6 +38,7 @@ export function ConfigurationView({
   estimate,
   token,
   initialConfig,
+  analysisSegment,
   onContinue,
   onCancel,
 }: Props) {
@@ -53,11 +55,16 @@ export function ConfigurationView({
     let cancelled = false
     const jobId = estimate.job_id
 
-    getPreviewFrame(jobId, token)
+    const atSec = analysisSegment?.start_sec ?? 0
+
+    getPreviewFrame(jobId, token, atSec)
       .then((frame) => {
         if (cancelled) return
         setLoadedFrame({ jobId, frame })
-        setConfig((current) => current ?? createDefaultProcessingConfig(serviceKey, frame.width, frame.height))
+        setConfig((current) => {
+          const next = current ?? createDefaultProcessingConfig(serviceKey, frame.width, frame.height)
+          return analysisSegment ? { ...next, analysis_segment: analysisSegment } : next
+        })
       })
       .catch((error: unknown) => {
         toast.error(error instanceof Error ? error.message : 'No se pudo cargar el frame')
@@ -66,7 +73,7 @@ export function ConfigurationView({
     return () => {
       cancelled = true
     }
-  }, [estimate.job_id, serviceKey, token])
+  }, [analysisSegment, estimate.job_id, serviceKey, token])
 
   const summary = useMemo(() => summarizeProcessingConfig(config), [config])
 
@@ -84,7 +91,12 @@ export function ConfigurationView({
     if (!config) return
     setPreviewLoading(true)
     try {
-      const result = await previewJob(estimate.job_id, config, token)
+      const segment = config.analysis_segment
+      const seconds = segment ? Math.min(3, segment.end_sec - segment.start_sec) : 3
+      const result = await previewJob(estimate.job_id, config, token, {
+        at_sec: segment?.start_sec,
+        seconds,
+      })
       setPreview(result)
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'No se pudo previsualizar')
@@ -95,7 +107,8 @@ export function ConfigurationView({
 
   function resetConfig() {
     if (!previewFrame) return
-    updateConfig(createDefaultProcessingConfig(serviceKey, previewFrame.width, previewFrame.height))
+    const next = createDefaultProcessingConfig(serviceKey, previewFrame.width, previewFrame.height)
+    updateConfig(analysisSegment ? { ...next, analysis_segment: analysisSegment } : next)
   }
 
   if (loadingFrame || !previewFrame || !config) {

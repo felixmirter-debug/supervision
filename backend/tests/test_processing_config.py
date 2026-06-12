@@ -1,6 +1,13 @@
 import numpy as np
 
-from routers.services._config import config_polygons, first_line, point_to_pixel, summarize_config
+from routers.services._config import (
+    analysis_duration,
+    analysis_segment,
+    config_polygons,
+    first_line,
+    point_to_pixel,
+    summarize_config,
+)
 
 
 def test_point_to_pixel_converts_normalized_coordinates():
@@ -62,4 +69,19 @@ def test_summarize_config_counts_shapes():
         "confidence": 0.4,
         "class_filter": ["person"],
         "mode": "inside",
+        "analysis_segment": None,
     }
+
+
+def test_analysis_segment_clamps_to_video_duration():
+    assert analysis_segment(
+        {"analysis_segment": {"start_sec": 2, "end_sec": 20}},
+        total_duration=8,
+    ) == {"start_sec": 2.0, "end_sec": 8}
+
+
+def test_analysis_duration_uses_selected_segment():
+    assert analysis_duration(
+        {"analysis_segment": {"start_sec": 4, "end_sec": 9}},
+        full_duration=30,
+    ) == 5

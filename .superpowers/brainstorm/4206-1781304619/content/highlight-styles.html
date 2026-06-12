@@ -1,0 +1,66 @@
+<h2>¿Qué estilos de resaltado quieres ofrecer?</h2>
+<p class="subtitle">Todos son anotadores nativos de la librería supervision — puedes elegir varios (el usuario final elegiría entre los que activemos). Mockup aproximado sobre un campo de fútbol.</p>
+
+<div class="cards" data-multiselect>
+  <div class="card" data-choice="ellipse" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;left:50%;top:30px;transform:translateX(-50%);width:22px;height:50px;background:#e74c3c;border-radius:6px 6px 3px 3px"></div>
+      <div style="position:absolute;left:50%;top:78px;transform:translateX(-50%);width:48px;height:14px;border:3px solid #00ffcc;border-radius:50%;border-top-color:transparent"></div>
+    </div>
+    <div class="card-body"><h3>Ellipse (estilo TV deportiva)</h3><p>Elipse bajo los pies del jugador, como en transmisiones de fútbol. EllipseAnnotator.</p></div>
+  </div>
+
+  <div class="card" data-choice="triangle" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;left:50%;top:10px;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:18px solid #ffd700"></div>
+      <div style="position:absolute;left:50%;top:38px;transform:translateX(-50%);width:22px;height:50px;background:#e74c3c;border-radius:6px 6px 3px 3px"></div>
+    </div>
+    <div class="card-body"><h3>Triangle (flecha superior)</h3><p>Marcador triangular flotando sobre la cabeza del objeto seleccionado. TriangleAnnotator.</p></div>
+  </div>
+
+  <div class="card" data-choice="halo" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;left:50%;top:35px;transform:translateX(-50%);width:60px;height:80px;background:radial-gradient(ellipse,rgba(0,200,255,.55),transparent 70%);border-radius:50%"></div>
+      <div style="position:absolute;left:50%;top:48px;transform:translateX(-50%);width:22px;height:50px;background:#e74c3c;border-radius:6px 6px 3px 3px"></div>
+    </div>
+    <div class="card-body"><h3>Halo (resplandor)</h3><p>Aura luminosa alrededor del objeto. HaloAnnotator (requiere segmentación).</p></div>
+  </div>
+
+  <div class="card" data-choice="color" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;left:50%;top:38px;transform:translateX(-50%);width:30px;height:60px;background:rgba(255,0,128,.5);border-radius:8px"></div>
+      <div style="position:absolute;left:50%;top:42px;transform:translateX(-50%);width:22px;height:50px;background:#e74c3c;opacity:.7;border-radius:6px 6px 3px 3px"></div>
+    </div>
+    <div class="card-body"><h3>Color overlay</h3><p>Tinte semitransparente sobre el objeto. ColorAnnotator.</p></div>
+  </div>
+
+  <div class="card" data-choice="trace" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <svg style="position:absolute;inset:0" width="100%" height="140"><path d="M20,120 C60,100 90,110 130,70 S 190,60 210,55" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+      <div style="position:absolute;right:40px;top:30px;width:22px;height:50px;background:#e74c3c;border-radius:6px 6px 3px 3px"></div>
+    </div>
+    <div class="card-body"><h3>Trace (estela de trayectoria)</h3><p>Línea que dibuja el recorrido del jugador en los últimos segundos. TraceAnnotator.</p></div>
+  </div>
+
+  <div class="card" data-choice="blur-rest" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px)"></div>
+      <div style="position:absolute;left:30px;top:50px;width:18px;height:40px;background:#888;border-radius:5px;filter:blur(3px)"></div>
+      <div style="position:absolute;right:50px;top:60px;width:18px;height:40px;background:#888;border-radius:5px;filter:blur(3px)"></div>
+      <div style="position:absolute;left:50%;top:40px;transform:translateX(-50%);width:24px;height:55px;background:#e74c3c;border-radius:6px 6px 3px 3px;box-shadow:0 0 20px rgba(255,255,255,.4)"></div>
+    </div>
+    <div class="card-body"><h3>Spotlight (oscurecer el resto)</h3><p>El jugador seleccionado queda nítido y el resto de la escena se oscurece/atenúa. Efecto "foco".</p></div>
+  </div>
+
+  <div class="card" data-choice="label" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#2d7a3a;position:relative;height:140px">
+      <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#111;color:#fff;font-size:12px;padding:3px 10px;border-radius:4px;font-family:sans-serif">Messi #10</div>
+      <div style="position:absolute;left:50%;top:42px;transform:translateX(-50%);width:22px;height:50px;background:#e74c3c;border-radius:6px 6px 3px 3px"></div>
+    </div>
+    <div class="card-body"><h3>Etiqueta con nombre personalizado</h3><p>Nombre editable por el usuario ("Messi #10") siguiendo al objeto. LabelAnnotator.</p></div>
+  </div>
+
+  <div class="card" data-choice="all" onclick="toggleSelect(this)">
+    <div class="card-body"><h3>Todos los anteriores</h3><p>Implementar todos como opciones combinables — el usuario arma su propio estilo (ej. ellipse + label + trace).</p></div>
+  </div>
+</div>

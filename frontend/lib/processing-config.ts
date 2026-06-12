@@ -23,6 +23,12 @@ export type RoiConfig = {
   points: NormalizedPoint[]
 }
 
+export type AnalysisSegment = {
+  start_sec: number
+  end_sec: number
+  label?: string
+}
+
 export type ProcessingConfig = {
   frame_width: number
   frame_height: number
@@ -32,6 +38,7 @@ export type ProcessingConfig = {
   lines?: LineConfig[]
   rois?: RoiConfig[]
   mode?: 'inside' | 'entry_exit'
+  analysis_segment?: AnalysisSegment
 }
 
 export type ConfigurableService =
@@ -95,6 +102,7 @@ export function summarizeProcessingConfig(config: ProcessingConfig | null | unde
   if (roiCount > 0) parts.push(`${roiCount} ROI`)
   if (config.class_filter?.length) parts.push(`${config.class_filter.length} clases`)
   if (typeof config.confidence === 'number') parts.push(`conf. ${Math.round(config.confidence * 100)}%`)
+  if (config.analysis_segment) parts.push(`segmento ${formatSegmentRange(config.analysis_segment)}`)
   return parts.length > 0 ? parts.join(' · ') : 'Configuracion base'
 }
 
@@ -107,4 +115,22 @@ export function parseClassFilter(value: string): string[] {
 
 export function formatClassFilter(values: string[] | undefined): string {
   return (values ?? []).join(', ')
+}
+
+export function segmentDuration(segment: AnalysisSegment | null | undefined): number {
+  if (!segment) return 0
+  return Math.max(0, segment.end_sec - segment.start_sec)
+}
+
+export function formatSegmentRange(segment: AnalysisSegment): string {
+  return `${formatSegmentTime(segment.start_sec)}-${formatSegmentTime(segment.end_sec)}`
+}
+
+export function formatSegmentTime(value: number): string {
+  const totalSeconds = Math.max(0, Math.floor(value))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  const tenths = Math.floor((Math.max(0, value) - totalSeconds) * 10)
+  const padded = seconds.toString().padStart(2, '0')
+  return tenths > 0 ? `${minutes}:${padded}.${tenths}` : `${minutes}:${padded}`
 }

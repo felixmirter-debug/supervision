@@ -17,7 +17,7 @@ export const SERVICES = [
     description: 'Track objects across video frames with persistent unique IDs.',
     icon: Users,
     creditsPerSec: 0.8,
-    color: 'text-blue-400',
+    color: 'text-brand',
   },
   {
     slug: 'ppe-detection',
@@ -26,7 +26,7 @@ export const SERVICES = [
     description: 'Detect safety equipment compliance: helmets, vests, gloves.',
     icon: HardHat,
     creditsPerSec: 1.0,
-    color: 'text-orange-400',
+    color: 'text-brand',
   },
   {
     slug: 'traffic',
@@ -35,7 +35,7 @@ export const SERVICES = [
     description: 'Count vehicles by type and estimate speed on roads.',
     icon: Car,
     creditsPerSec: 0.8,
-    color: 'text-green-400',
+    color: 'text-brand',
   },
   {
     slug: 'quality-control',
@@ -44,7 +44,7 @@ export const SERVICES = [
     description: 'Detect defects and anomalies in products on production lines.',
     icon: CheckCircle,
     creditsPerSec: 1.0,
-    color: 'text-red-400',
+    color: 'text-brand',
   },
 ] as const
 

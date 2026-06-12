@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from core.auth import get_current_user
 from core.credits import estimate_cost, get_service_pricing, reserve_credits
 from core.db import get_supabase
+from routers.services._config import analysis_duration
 from routers.services._pipeline import process_job_background
 
 router = APIRouter()
@@ -118,12 +119,6 @@ async def estimate(
 
     credits_estimated = estimate_cost(duration, float(pricing["credits_per_sec"]))
 
-    if user["credits"] < credits_estimated:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Insufficient credits: need {credits_estimated}, have {user['credits']}",
-        )
-
     job_id = str(uuid.uuid4())
     supabase = get_supabase()
     supabase.table("jobs").insert({
@@ -178,14 +173,24 @@ async def process(
             detail=f"Job status is '{job['status']}', expected 'estimating'",
         )
 
+    pricing = get_service_pricing(service)
+    duration = analysis_duration(body.processing_config, float(job.get("duration_sec") or 0))
+    credits_estimated = estimate_cost(duration, float(pricing["credits_per_sec"]))
+    if user["credits"] < credits_estimated:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits: need {credits_estimated}, have {user['credits']}",
+        )
+
     try:
-        reserve_credits(user["user_id"], body.job_id, job["credits_estimated"])
+        reserve_credits(user["user_id"], body.job_id, credits_estimated)
     except ValueError as e:
         raise HTTPException(status_code=402, detail=str(e))
 
     supabase.table("jobs").update({
         "status": "processing",
         "confirmed_at": datetime.now(timezone.utc).isoformat(),
+        "credits_estimated": credits_estimated,
         "processing_config": body.processing_config,
     }).eq("id", body.job_id).execute()
 

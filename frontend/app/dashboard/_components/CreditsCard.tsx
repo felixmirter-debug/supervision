@@ -1,10 +1,9 @@
 'use client'
 
-import { Card } from '@/components/ui/card'
+import Link from 'next/link'
+import { ArrowRight, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
-import { Zap } from 'lucide-react'
-import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { formatCredits } from '@/lib/formatters'
 import { SERVICES } from '@/lib/services'
@@ -17,39 +16,38 @@ export function CreditsCard({ profile }: { profile: Profile }) {
   const secs = secondsLeft % 60
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-brand" />
-          <h2 className="font-semibold">Créditos</h2>
+    <section className="surface-panel rounded-lg p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Zap className="size-4 text-brand" />
+            Saldo operativo
+          </div>
+          <p className="mt-4 font-mono text-4xl">{formatCredits(profile.credits)}</p>
         </div>
-        <Badge variant="secondary" className="font-mono text-base px-3 py-1">
-          {formatCredits(profile.credits)}
-        </Badge>
+        <Badge variant="secondary">{profile.plan}</Badge>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Equivale a ≈{minutes > 0 ? `${minutes}m ` : ''}{secs}s de procesamiento (servicio más económico)
+      <p className="mt-4 text-sm text-muted-foreground">
+        Aproximadamente {minutes > 0 ? `${minutes}m ` : ''}{secs}s en el servicio mas economico.
       </p>
 
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        {SERVICES.map((s) => {
-          const secs = Math.floor(profile.credits / s.creditsPerSec)
+      <div className="mt-5 space-y-2 border-t border-border pt-4">
+        {SERVICES.map((service) => {
+          const seconds = Math.floor(profile.credits / service.creditsPerSec)
           return (
-            <div key={s.slug} className="flex justify-between text-muted-foreground">
-              <span>{s.label}</span>
-              <span className="font-mono">{secs}s</span>
+            <div key={service.slug} className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{service.label}</span>
+              <span className="font-mono">{seconds}s</span>
             </div>
           )
         })}
       </div>
 
-      <Link
-        href="/services"
-        className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'w-full')}
-      >
-        Usar créditos
+      <Link href="/services" className={cn(buttonVariants({ size: 'sm' }), 'mt-5 w-full gap-2')}>
+        Usar creditos
+        <ArrowRight className="size-3.5" />
       </Link>
-    </Card>
+    </section>
   )
 }

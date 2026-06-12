@@ -1,4 +1,4 @@
-import type { ProcessingConfig } from '@/lib/processing-config'
+import type { AnalysisSegment, ProcessingConfig } from '@/lib/processing-config'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -38,6 +38,34 @@ async function apiFetch<T>(
   }
 
   return res.json() as Promise<T>
+}
+
+async function apiFetchBlob(
+  path: string,
+  options: RequestInit = {},
+  token?: string
+): Promise<Blob> {
+  const headers: Record<string, string> = {}
+
+  if (!(options.body instanceof FormData) && options.body) {
+    headers['Content-Type'] = 'application/json'
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...headers, ...(options.headers as Record<string, string>) },
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new ApiError(res.status, error.detail || 'Request failed')
+  }
+
+  return res.blob()
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -126,7 +154,8 @@ export function getPreviewFrame(
 export function previewJob(
   jobId: string,
   processingConfig: ProcessingConfig,
-  token: string
+  token: string,
+  options?: { at_sec?: number; seconds?: number }
 ): Promise<PreviewResult> {
   return apiFetch<PreviewResult>(
     `/jobs/${jobId}/preview`,
@@ -134,10 +163,27 @@ export function previewJob(
       method: 'POST',
       body: JSON.stringify({
         processing_config: processingConfig,
-        seconds: 3,
+        at_sec: options?.at_sec ?? processingConfig.analysis_segment?.start_sec ?? 0,
+        seconds: options?.seconds ?? 3,
         sample_fps: 2,
       }),
     },
+    token
+  )
+}
+
+export function getSourcePreview(jobId: string, token: string): Promise<Blob> {
+  return apiFetchBlob(`/jobs/${jobId}/source-preview`, {}, token)
+}
+
+export function exportJobClip(
+  jobId: string,
+  segment: AnalysisSegment,
+  token: string
+): Promise<Blob> {
+  return apiFetchBlob(
+    `/jobs/${jobId}/export-clip`,
+    { method: 'POST', body: JSON.stringify(segment) },
     token
   )
 }

@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const ACCENT_STORAGE_KEY = 'cv-saas-accent-theme'
 const MODE_STORAGE_KEY = 'cv-saas-color-mode'
 const THEME_CHANGE_EVENT = 'cv-saas-theme-change'
+const DEFAULT_ACCENT = 'blue'
+const DEFAULT_MODE = 'dark'
 
 const THEMES = [
   { value: 'blue', label: 'Azul', swatch: 'bg-sky-400' },
@@ -16,10 +18,7 @@ const THEMES = [
 
 type AccentTheme = (typeof THEMES)[number]['value']
 type ColorMode = 'light' | 'dark'
-type ThemeSnapshot = { accent: AccentTheme; mode: ColorMode }
-
-const DEFAULT_ACCENT: AccentTheme = 'blue'
-const DEFAULT_MODE: ColorMode = 'dark'
+type ThemeSnapshot = `${AccentTheme}:${ColorMode}`
 
 function isAccentTheme(value: string | null): value is AccentTheme {
   return THEMES.some((theme) => theme.value === value)
@@ -29,27 +28,33 @@ function isColorMode(value: string | null): value is ColorMode {
   return value === 'light' || value === 'dark'
 }
 
-function applyTheme(theme: ThemeSnapshot) {
-  document.documentElement.dataset.accentTheme = theme.accent
-  document.documentElement.dataset.colorMode = theme.mode
-  document.documentElement.classList.toggle('dark', theme.mode === 'dark')
+function encodeTheme(accent: AccentTheme, mode: ColorMode): ThemeSnapshot {
+  return `${accent}:${mode}`
+}
+
+function decodeTheme(snapshot: ThemeSnapshot) {
+  const [accent, mode] = snapshot.split(':') as [AccentTheme, ColorMode]
+  return { accent, mode }
+}
+
+function applyTheme(accent: AccentTheme, mode: ColorMode) {
+  document.documentElement.dataset.accentTheme = accent
+  document.documentElement.dataset.colorMode = mode
+  document.documentElement.classList.toggle('dark', mode === 'dark')
 }
 
 function getStoredTheme(): ThemeSnapshot {
-  if (typeof window === 'undefined') {
-    return { accent: DEFAULT_ACCENT, mode: DEFAULT_MODE }
-  }
+  if (typeof window === 'undefined') return encodeTheme(DEFAULT_ACCENT, DEFAULT_MODE)
 
   try {
     const storedAccent = window.localStorage.getItem(ACCENT_STORAGE_KEY)
     const storedMode = window.localStorage.getItem(MODE_STORAGE_KEY)
+    const accent = isAccentTheme(storedAccent) ? storedAccent : DEFAULT_ACCENT
+    const mode = isColorMode(storedMode) ? storedMode : DEFAULT_MODE
 
-    return {
-      accent: isAccentTheme(storedAccent) ? storedAccent : DEFAULT_ACCENT,
-      mode: isColorMode(storedMode) ? storedMode : DEFAULT_MODE,
-    }
+    return encodeTheme(accent, mode)
   } catch {
-    return { accent: DEFAULT_ACCENT, mode: DEFAULT_MODE }
+    return encodeTheme(DEFAULT_ACCENT, DEFAULT_MODE)
   }
 }
 
@@ -64,18 +69,16 @@ function subscribeThemeChanges(onStoreChange: () => void) {
 }
 
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribeThemeChanges, getStoredTheme, () => ({
-    accent: DEFAULT_ACCENT,
-    mode: DEFAULT_MODE,
-  }))
+  const snapshot = useSyncExternalStore(subscribeThemeChanges, getStoredTheme, () => encodeTheme(DEFAULT_ACCENT, DEFAULT_MODE))
+  const theme = useMemo(() => decodeTheme(snapshot), [snapshot])
 
   useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
+    applyTheme(theme.accent, theme.mode)
+  }, [theme.accent, theme.mode])
 
-  function selectTheme(nextTheme: Partial<ThemeSnapshot>) {
+  function selectTheme(nextTheme: Partial<{ accent: AccentTheme; mode: ColorMode }>) {
     const next = { ...theme, ...nextTheme }
-    applyTheme(next)
+    applyTheme(next.accent, next.mode)
 
     try {
       window.localStorage.setItem(ACCENT_STORAGE_KEY, next.accent)
@@ -88,11 +91,7 @@ export function ThemeToggle() {
   }
 
   return (
-    <div
-      className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card/80 p-0.5 shadow-sm backdrop-blur"
-      role="group"
-      aria-label="Tema visual"
-    >
+    <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card/80 p-0.5 shadow-sm backdrop-blur" role="group" aria-label="Tema visual">
       <button
         type="button"
         aria-label={`Cambiar a modo ${theme.mode === 'dark' ? 'claro' : 'oscuro'}`}
@@ -105,7 +104,6 @@ export function ThemeToggle() {
       <span className="h-5 w-px bg-border" />
       {THEMES.map((item) => {
         const selected = theme.accent === item.value
-
         return (
           <button
             key={item.value}
@@ -114,15 +112,9 @@ export function ThemeToggle() {
             aria-pressed={selected}
             title={`Acento ${item.label}`}
             onClick={() => selectTheme({ accent: item.value })}
-            className={cn(
-              'inline-flex size-7 items-center justify-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              selected ? 'bg-brand-soft ring-1 ring-brand-border' : 'hover:bg-muted'
-            )}
+            className={cn('inline-flex size-7 items-center justify-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50', selected ? 'bg-brand-soft ring-1 ring-brand-border' : 'hover:bg-muted')}
           >
-            <span
-              aria-hidden="true"
-              className={cn('size-3 rounded-full ring-1 ring-white/40', item.swatch)}
-            />
+            <span aria-hidden="true" className={cn('size-3 rounded-full ring-1 ring-white/40', item.swatch)} />
           </button>
         )
       })}

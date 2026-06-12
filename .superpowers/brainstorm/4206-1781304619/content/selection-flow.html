@@ -1,0 +1,59 @@
+<h2>¿Cómo selecciona el usuario al jugador a seguir?</h2>
+<p class="subtitle">Tres flujos de selección posibles. Elige el que prefieras (o combina).</p>
+
+<div class="options">
+  <div class="option" data-choice="click-frame" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Clic directo sobre el video</h3>
+      <p>El backend detecta todos los objetos en un frame de previsualización. El usuario pausa/navega el video, ve los objetos detectados con cajas tenues, y hace clic sobre el jugador que quiere. Puede seleccionar varios. Es el flujo más natural e intuitivo.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body" style="background:#2d7a3a;position:relative;height:160px;border-radius:6px">
+          <div style="position:absolute;left:14%;top:50px;width:20px;height:45px;background:#e74c3c;border-radius:5px;outline:1px dashed rgba(255,255,255,.5)"></div>
+          <div style="position:absolute;left:45%;top:38px;width:20px;height:45px;background:#3498db;border-radius:5px;outline:3px solid #00ffcc;box-shadow:0 0 14px #00ffcc"></div>
+          <div style="position:absolute;left:45%;top:14px;color:#00ffcc;font-size:11px;font-family:sans-serif">✓ seleccionado</div>
+          <div style="position:absolute;left:74%;top:62px;width:20px;height:45px;background:#e74c3c;border-radius:5px;outline:1px dashed rgba(255,255,255,.5)"></div>
+          <div style="position:absolute;bottom:8px;left:8px;right:8px;height:6px;background:rgba(0,0,0,.4);border-radius:3px"><div style="width:30%;height:100%;background:#fff;border-radius:3px"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="gallery" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Galería de objetos detectados</h3>
+      <p>El backend hace una pasada previa, extrae recortes (thumbnails) de cada objeto detectado y los muestra en una grilla lateral. El usuario marca los que quiere seguir desde la galería. Útil cuando hay muchos objetos pequeños difíciles de clicar.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body" style="display:flex;gap:8px">
+          <div style="flex:2;background:#2d7a3a;height:120px;border-radius:6px"></div>
+          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div style="background:#444;border-radius:4px;outline:2px solid #00ffcc"></div>
+            <div style="background:#444;border-radius:4px"></div>
+            <div style="background:#444;border-radius:4px"></div>
+            <div style="background:#444;border-radius:4px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Híbrido: clic en video + panel lateral sincronizado</h3>
+      <p>Clic directo sobre el video (A) y a la vez un panel lateral con la lista de objetos seleccionados, donde se edita el nombre, color y estilo de cada uno. Lo mejor de ambos: selección natural + gestión clara de los objetos elegidos.</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body" style="display:flex;gap:8px">
+          <div style="flex:2;background:#2d7a3a;position:relative;height:130px;border-radius:6px">
+            <div style="position:absolute;left:40%;top:35px;width:18px;height:42px;background:#3498db;border-radius:5px;outline:3px solid #00ffcc"></div>
+          </div>
+          <div style="flex:1;background:#1c1c24;border-radius:6px;padding:8px;font-family:sans-serif;font-size:11px;color:#ddd">
+            <div style="background:#2a2a35;border-radius:4px;padding:6px;margin-bottom:6px">🟢 "Messi #10" — ellipse+trace ✏️</div>
+            <div style="background:#2a2a35;border-radius:4px;padding:6px;opacity:.6">+ añadir objeto…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

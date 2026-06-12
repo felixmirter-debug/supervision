@@ -1,199 +1,87 @@
 'use client'
 
-import { useCallback, useEffect, useState, use } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, use } from 'react'
 import { Nav } from '@/components/nav'
-import { Card } from '@/components/ui/card'
-import { useAuthStore } from '@/stores/auth-store'
-import { estimateService, getJob, processService } from '@/lib/api'
-import { getService } from '@/lib/services'
-import { toast } from 'sonner'
-import type { EstimateResult, Job } from '@/lib/api'
-import type { ProcessingConfig } from '@/lib/processing-config'
 import { ConfirmModal } from './_components/ConfirmModal'
-import { ServiceStagePanel, type ServiceStage } from './_components/ServiceStagePanel'
-import type { InputType } from './_components/InputSelector'
+import { ServiceStagePanel } from './_components/ServiceStagePanel'
+import { ServiceStageRail } from './_components/ServiceStageRail'
+import { useServiceWorkflow } from './_components/useServiceWorkflow'
 
 export default function ServicePage({ params }: { params: Promise<{ slug: string }> }) {
+  return (
+    <Suspense fallback={<ServiceFallback />}>
+      <ServiceContent params={params} />
+    </Suspense>
+  )
+}
+
+function ServiceFallback() {
+  return (
+    <>
+      <Nav />
+      <div className="mx-auto max-w-7xl px-4 py-10 text-sm text-muted-foreground">Cargando...</div>
+    </>
+  )
+}
+
+function ServiceContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { session, profile } = useAuthStore()
+  const flow = useServiceWorkflow(slug)
 
-  const [stage, setStage] = useState<ServiceStage>('idle')
-  const [estimate, setEstimate] = useState<EstimateResult | null>(null)
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [resultJob, setResultJob] = useState<Job | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [confirmLoading, setConfirmLoading] = useState(false)
-  const [processingConfig, setProcessingConfig] = useState<ProcessingConfig | null>(null)
+  if (!flow.ready || !flow.service || !flow.profile) return null
 
-  const service = getService(slug)
-  const updateUrl = useCallback((nextStage: ServiceStage, id?: string | null) => {
-    const query = id ? `?job=${id}&stage=${nextStage}` : ''
-    router.replace(`/services/${slug}${query}`, { scroll: false })
-  }, [router, slug])
-
-  useEffect(() => {
-    const queryJobId = searchParams.get('job')
-    const queryStage = searchParams.get('stage')
-    if (!queryJobId || estimate || jobId || resultJob || !session || !service) return
-
-    getJob(queryJobId, session.access_token)
-      .then((job) => {
-        if (job.status === 'done') {
-          setResultJob(job)
-          setProcessingConfig(job.processing_config)
-          setStage('done')
-          return
-        }
-        if (job.status === 'failed') {
-          setErrorMsg(job.error_message ?? 'Error desconocido')
-          setStage('failed')
-          return
-        }
-        if (job.status === 'processing' || queryStage === 'processing') {
-          setJobId(job.id)
-          setStage('processing')
-          return
-        }
-        setEstimate({
-          job_id: job.id,
-          duration_sec: job.duration_sec ?? 0,
-          credits_estimated: job.credits_estimated ?? 0,
-          credits_per_sec: service.creditsPerSec,
-          service: job.service,
-        })
-        setJobId(job.id)
-        setProcessingConfig(job.processing_config)
-        setStage('configuring')
-      })
-      .catch(() => updateUrl('idle'))
-  }, [estimate, jobId, resultJob, searchParams, service, session, updateUrl])
-  if (!service) {
-    router.replace('/services')
-    return null
-  }
-
-  if (!session || !profile) {
-    router.replace('/login')
-    return null
-  }
-
-  const token = session.access_token
-
-  async function handleInput(type: InputType, file?: File, url?: string) {
-    setStage('estimating')
-    try {
-      const fd = new FormData()
-      fd.append('input_type', type)
-      if (type === 'upload' && file) fd.append('file', file)
-      if (type === 'url' && url) fd.append('input_url', url)
-
-      const est = await estimateService(slug, fd, token)
-      setEstimate(est)
-      setJobId(est.job_id)
-      setStage('configuring')
-      updateUrl('configuring', est.job_id)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al estimar'
-      toast.error(msg)
-      setStage('idle')
-    }
-  }
-
-  async function handleConfirm() {
-    if (!estimate) return
-    setConfirmLoading(true)
-    try {
-      const res = await processService(
-        slug,
-        { job_id: estimate.job_id, confirmed: true, processing_config: processingConfig ?? undefined },
-        token
-      )
-      setJobId(res.job_id)
-      setStage('processing')
-      updateUrl('processing', res.job_id)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al iniciar procesamiento')
-      setStage('idle')
-    } finally {
-      setConfirmLoading(false)
-    }
-  }
-
-  function handleDone(job: Job) {
-    setResultJob(job)
-    setProcessingConfig(job.processing_config)
-    setStage('done')
-    updateUrl('done', job.id)
-    toast.success('Procesamiento completado')
-  }
-
-  function handleFailed(job: Job) {
-    setErrorMsg(job.error_message ?? 'Error desconocido')
-    setStage('failed')
-    updateUrl('failed', job.id)
-    toast.error('El procesamiento fallo')
-  }
-
-  function reset() {
-    setStage('idle')
-    setEstimate(null)
-    setJobId(null)
-    setResultJob(null)
-    setErrorMsg(null)
-    setProcessingConfig(null)
-    updateUrl('idle')
-  }
-
-  function handleConfigured(config: ProcessingConfig) {
-    setProcessingConfig(config)
-    setStage('confirming')
-    if (estimate) updateUrl('confirming', estimate.job_id)
-  }
-
-  const Icon = service.icon
+  const Icon = flow.service.icon
+  const reviewing = flow.stage === 'reviewing'
+  const mainClass = reviewing
+    ? 'mx-auto grid max-w-[1600px] gap-4 px-4 py-6 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:px-8'
+    : 'mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[320px_1fr] lg:px-8'
 
   return (
     <>
       <Nav />
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <Icon className={`h-7 w-7 ${service.color}`} />
-          <div>
-            <h1 className="text-2xl font-bold">{service.label}</h1>
-            <p className="text-sm text-muted-foreground">{service.description}</p>
-          </div>
-        </div>
-
-        <Card className="p-6">
+      <main className={mainClass}>
+        <aside className="space-y-4">
+          <section className={reviewing ? 'surface-panel rounded-lg p-4' : 'surface-panel rounded-lg p-5'}>
+            <Icon className="mb-5 size-8 text-brand" />
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Pipeline</p>
+            <h1 className={reviewing ? 'mt-2 text-xl font-semibold' : 'mt-2 text-3xl font-semibold'}>
+              {flow.service.label}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{flow.service.description}</p>
+          </section>
+          <ServiceStageRail stage={flow.stage} />
+        </aside>
+        <section className={reviewing ? 'surface-panel min-h-[760px] rounded-lg p-4' : 'surface-panel min-h-[620px] rounded-lg p-5'}>
           <ServiceStagePanel
-            stage={stage}
-            service={service}
-            estimate={estimate}
-            jobId={jobId}
-            token={token}
-            resultJob={resultJob}
-            errorMsg={errorMsg}
-            processingConfig={processingConfig}
-            onInput={handleInput}
-            onConfigured={handleConfigured}
-            onDone={handleDone}
-            onFailed={handleFailed}
-            onReset={reset}
+            stage={flow.stage}
+            service={flow.service}
+            estimate={flow.estimate}
+            jobId={flow.jobId}
+            token={flow.token}
+            resultJob={flow.resultJob}
+            errorMsg={flow.errorMsg}
+            processingConfig={flow.processingConfig}
+            reviewSource={flow.reviewSource}
+            analysisSegment={flow.analysisSegment}
+            onInput={flow.handleInput}
+            onReviewed={flow.handleReviewed}
+            onBackToReview={flow.handleBackToReview}
+            onConfigured={flow.handleConfigured}
+            onDone={flow.handleDone}
+            onFailed={flow.handleFailed}
+            onReset={flow.reset}
           />
-        </Card>
+        </section>
       </main>
 
       <ConfirmModal
-        estimate={estimate}
-        open={stage === 'confirming'}
-        loading={confirmLoading}
-        userCredits={profile.credits}
-        processingConfig={processingConfig}
-        onConfirm={handleConfirm}
-        onCancel={() => setStage('configuring')}
+        estimate={flow.estimate}
+        open={flow.stage === 'confirming'}
+        loading={flow.confirmLoading}
+        userCredits={flow.profile.credits}
+        processingConfig={flow.processingConfig}
+        onConfirm={flow.handleConfirm}
+        onCancel={() => flow.setStage('configuring')}
       />
     </>
   )

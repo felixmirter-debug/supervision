@@ -25,7 +25,7 @@ export function PreviewMetricsPanel({ preview }: Props) {
   const rows = metricRows(preview)
 
   return (
-    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/25 p-3">
+    <div className="space-y-2 rounded-lg border border-border bg-card/60 p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Metricas</p>
         {preview && <Badge variant="secondary">{preview.sampled_frames} frames</Badge>}
@@ -38,7 +38,7 @@ export function PreviewMetricsPanel({ preview }: Props) {
           {rows.map(([key, value]) => (
             <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
               <span className="truncate text-muted-foreground">{key.replace(/_/g, ' ')}</span>
-              <span className="max-w-32 truncate rounded-md bg-background px-2 py-1 font-mono text-foreground">
+              <span className="max-w-32 truncate rounded-md bg-muted px-2 py-1 font-mono text-foreground">
                 {compactValue(value)}
               </span>
             </div>

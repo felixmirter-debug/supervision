@@ -1,28 +1,38 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Eye, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card } from '@/components/ui/card'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { Eye, Loader2 } from 'lucide-react'
+import { VisionPreview } from '@/components/vision-preview'
 import { toast } from 'sonner'
 
 type Mode = 'signin' | 'signup'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginFallback() {
+  return <main className="min-h-screen px-4 py-5 text-sm text-muted-foreground">Cargando...</main>
+}
+
+function LoginContent() {
   const router = useRouter()
   const params = useSearchParams()
   const redirectTo = params.get('redirectTo') || '/dashboard'
-
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-
   const supabase = createClient()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -33,7 +43,7 @@ export default function LoginPage() {
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        toast.success('Cuenta creada — revisa tu email para confirmar')
+        toast.success('Cuenta creada. Revisa tu email para confirmar')
         setMode('signin')
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -42,8 +52,7 @@ export default function LoginPage() {
         router.refresh()
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error de autenticación'
-      toast.error(msg)
+      toast.error(err instanceof Error ? err.message : 'Error de autenticacion')
     } finally {
       setLoading(false)
     }
@@ -58,7 +67,7 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({ email })
       if (error) throw error
-      toast.success('Magic link enviado — revisa tu email')
+      toast.success('Magic link enviado. Revisa tu email')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error enviando magic link')
     } finally {
@@ -67,72 +76,69 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4">
-      <div className="fixed right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-sm p-6 space-y-6">
-        <div className="text-center space-y-1">
-          <div className="flex justify-center mb-3">
-            <Eye className="h-8 w-8 text-brand" />
+    <main className="grid min-h-screen lg:grid-cols-[0.95fr_1.05fr]">
+      <section className="flex min-h-screen flex-col justify-between px-4 py-5 sm:px-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 font-semibold">
+            <span className="flex size-9 items-center justify-center rounded-md border border-brand-border bg-brand-soft">
+              <Eye className="size-4 text-brand" />
+            </span>
+            CV SaaS
           </div>
-          <h1 className="text-xl font-semibold">CV SaaS</h1>
-          <p className="text-sm text-muted-foreground">
-            {mode === 'signin' ? 'Inicia sesión en tu cuenta' : 'Crea tu cuenta gratis'}
-          </p>
+          <ThemeToggle />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="tu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+        <div className="mx-auto w-full max-w-md py-12">
+          <div className="mb-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              {mode === 'signin' ? 'Acceso' : 'Registro'}
+            </p>
+            <h1 className="mt-2 text-4xl font-semibold">
+              {mode === 'signin' ? 'Continua tu procesamiento.' : 'Crea tu workspace visual.'}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Entra para revisar creditos, configurar jobs y descargar evidencia procesada.
+            </p>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === 'signin' ? 'Iniciar sesión' : 'Crear cuenta'}
-          </Button>
-        </form>
 
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleMagicLink}
-            disabled={loading}
-          >
-            Enviar magic link
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            {mode === 'signin' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
-            <button
-              type="button"
-              className="text-brand hover:underline"
-              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            >
-              {mode === 'signin' ? 'Regístrate' : 'Inicia sesión'}
-            </button>
-          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Contrasena</Label>
+              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === 'signin' ? 'Iniciar sesion' : 'Crear cuenta'}
+            </Button>
+          </form>
+
+          <div className="mt-3 space-y-3">
+            <Button variant="outline" className="w-full" onClick={handleMagicLink} disabled={loading}>
+              Enviar magic link
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              {mode === 'signin' ? 'No tienes cuenta?' : 'Ya tienes cuenta?'}{' '}
+              <button
+                type="button"
+                className="font-medium text-brand hover:underline"
+                onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              >
+                {mode === 'signin' ? 'Registrate' : 'Inicia sesion'}
+              </button>
+            </p>
+          </div>
         </div>
-      </Card>
+
+        <p className="text-xs text-muted-foreground">YOLOv8 + supervision, con creditos confirmados antes de procesar.</p>
+      </section>
+
+      <section className="hidden min-h-screen items-center border-l border-border bg-muted/30 p-8 lg:flex">
+        <VisionPreview compact className="w-full" />
+      </section>
     </main>
   )
 }

@@ -43,3 +43,27 @@ def test_transcode_requires_ffmpeg(monkeypatch, tmp_path):
 
     with pytest.raises(RuntimeError, match="FFmpeg is required"):
         _pipeline._transcode_for_browser(str(input_path), str(output_path))
+
+
+def test_clip_video_segment_transcodes_selected_range(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run(command, stdout, stderr, text, check):
+        captured["command"] = command
+        Path(command[-1]).write_bytes(b"clip-video")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    input_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "clip.mp4"
+    input_path.write_bytes(b"source-video")
+    monkeypatch.setattr(_pipeline, "_get_ffmpeg_exe", lambda: "ffmpeg")
+    monkeypatch.setattr(_pipeline.subprocess, "run", fake_run)
+
+    _pipeline._clip_video_segment(str(input_path), str(output_path), 2.5, 7.0)
+
+    assert output_path.read_bytes() == b"clip-video"
+    command = captured["command"]
+    assert command[command.index("-ss") + 1] == "2.500"
+    assert command[command.index("-t") + 1] == "4.500"
+    assert command[command.index("-c:v") + 1] == "libx264"
+    assert command[command.index("-movflags") + 1] == "+faststart"

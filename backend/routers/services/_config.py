@@ -18,6 +18,7 @@ def summarize_config(config: Optional[dict[str, Any]]) -> dict[str, Any]:
             "confidence": None,
             "class_filter": [],
             "mode": None,
+            "analysis_segment": None,
         }
     return {
         "zones": len(config.get("zones") or []),
@@ -26,6 +27,7 @@ def summarize_config(config: Optional[dict[str, Any]]) -> dict[str, Any]:
         "confidence": config.get("confidence"),
         "class_filter": config.get("class_filter") or [],
         "mode": config.get("mode"),
+        "analysis_segment": analysis_segment(config),
     }
 
 
@@ -34,6 +36,36 @@ def _numeric(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def analysis_segment(
+    config: Optional[dict[str, Any]],
+    total_duration: Optional[float] = None,
+) -> dict[str, float] | None:
+    if not config:
+        return None
+
+    raw = config.get("analysis_segment") or config.get("segment")
+    if not isinstance(raw, dict):
+        return None
+
+    start = max(0.0, _numeric(raw.get("start_sec"), 0.0))
+    fallback_end = total_duration if total_duration and total_duration > 0 else start
+    end = _numeric(raw.get("end_sec"), fallback_end)
+    if total_duration and total_duration > 0:
+        end = min(total_duration, end)
+
+    if end <= start:
+        return None
+
+    return {"start_sec": start, "end_sec": end}
+
+
+def analysis_duration(config: Optional[dict[str, Any]], full_duration: float) -> float:
+    segment = analysis_segment(config, full_duration)
+    if not segment:
+        return full_duration
+    return max(0.0, segment["end_sec"] - segment["start_sec"])
 
 
 def point_to_pixel(raw: Any, width: int, height: int) -> Point:

@@ -16,21 +16,32 @@ import cv2
 from core.credits import estimate_cost, get_service_pricing, refund_credits
 from core.db import get_supabase
 from core.models import get_model
+from routers.services._config import analysis_segment
 from routers.services._processors import get_processor
 
 
-def _read_frames(path: str, max_frames: int = 0) -> tuple[list, float, int]:
+def _read_frames(
+    path: str,
+    max_frames: int = 0,
+    segment: Optional[dict[str, float]] = None,
+) -> tuple[list, float, int]:
     """Returns (frames, fps, total_frame_count)."""
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    segment_limit = max_frames
+    if segment:
+        cap.set(cv2.CAP_PROP_POS_MSEC, segment["start_sec"] * 1000)
+        segment_frames = max(1, int(round((segment["end_sec"] - segment["start_sec"]) * fps)))
+        segment_limit = min(max_frames, segment_frames) if max_frames else segment_frames
+
     frames = []
     while cap.isOpened():
         ok, frame = cap.read()
         if not ok:
             break
         frames.append(frame)
-        if max_frames and len(frames) >= max_frames:
+        if segment_limit and len(frames) >= segment_limit:
             break
     cap.release()
     return frames, fps, total
@@ -111,6 +122,55 @@ def _write_video(frames: list, fps: float, output_path: str) -> None:
         raise RuntimeError("Encoded result video was not created")
 
 
+def _clip_video_segment(input_path: str, output_path: str, start_sec: float, end_sec: float) -> None:
+    ffmpeg = _get_ffmpeg_exe()
+    if not ffmpeg:
+        raise RuntimeError("FFmpeg is required to export browser-playable video clips")
+
+    duration = max(0.1, end_sec - start_sec)
+    completed = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-ss",
+            f"{start_sec:.3f}",
+            "-i",
+            input_path,
+            "-t",
+            f"{duration:.3f}",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            output_path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip()[-1000:]
+        raise RuntimeError(f"Could not export video clip: {detail}")
+
+    if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+        raise RuntimeError("Exported video clip was not created")
+
+
 def _upload_result(job_id: str, local_path: str) -> str:
     """Uploads annotated video to Supabase Storage and returns a signed URL."""
     supabase = get_supabase()
@@ -149,9 +209,6 @@ def process_job_background(
 
         # Load video
         input_path = job["input_url"]
-        frames, fps, _ = _read_frames(input_path)
-        if not frames:
-            raise RuntimeError("No frames decoded from input video")
 
         # Run service-specific processor
         processor = get_processor(service)
@@ -159,6 +216,11 @@ def process_job_background(
         config = processing_config or job.get("processing_config") or {}
         if not config and zone_config:
             config = {"zones": zone_config}
+        full_duration = float(job.get("duration_sec") or 0)
+        segment = analysis_segment(config, full_duration)
+        frames, fps, _ = _read_frames(input_path, segment=segment)
+        if not frames:
+            raise RuntimeError("No frames decoded from input video")
         annotated_frames, metrics = processor(frames, model, config)
 
         # Write annotated video to temp
