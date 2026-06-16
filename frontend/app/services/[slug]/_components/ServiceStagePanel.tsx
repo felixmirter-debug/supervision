@@ -94,6 +94,7 @@ export function ServiceStagePanel({
         jobId={estimate.job_id}
         token={token}
         videoUrl={reviewSource?.src ?? null}
+        segment={analysisSegment}
         targets={targets}
         onChange={onTargetsChange}
         onBack={onBackToReview}

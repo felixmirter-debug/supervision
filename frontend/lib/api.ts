@@ -130,6 +130,13 @@ export type DetectionPreviewResult = {
   frames: DetectionPreviewFrame[]
 }
 
+export type DetectionAtResult = {
+  job_id: string
+  fps: number
+  frame_idx: number
+  detections: DetectionPreviewEntry[]
+}
+
 export type Claim = {
   id: string
   user_id: string
@@ -242,11 +249,23 @@ export function processService(
 
 export function getDetectionPreview(
   slug: string,
-  body: { job_id: string; sample_fps?: number; confidence?: number },
+  body: { job_id: string; sample_fps?: number; confidence?: number; start_sec?: number; end_sec?: number },
   token: string
 ): Promise<DetectionPreviewResult> {
   return apiFetch<DetectionPreviewResult>(
     `/services/${slug}/detection-preview`,
+    { method: 'POST', body: JSON.stringify(body) },
+    token
+  )
+}
+
+export function getDetectionAt(
+  slug: string,
+  body: { job_id: string; at_sec: number; confidence?: number },
+  token: string
+): Promise<DetectionAtResult> {
+  return apiFetch<DetectionAtResult>(
+    `/services/${slug}/detection-at`,
     { method: 'POST', body: JSON.stringify(body) },
     token
   )

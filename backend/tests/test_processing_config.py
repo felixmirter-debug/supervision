@@ -151,3 +151,78 @@ def test_parse_targets_negative_frame_idx_clamps_to_zero():
     }]}
     targets = parse_targets(config, 100, 100)
     assert targets[0]["frame_idx"] == 0
+
+
+def _bbox(x1, y1, x2, y2):
+    return {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+
+
+def test_parse_targets_anchors_to_pixels_sorted():
+    config = {"targets": [{
+        "name": "Jugador",
+        "color": "#ff0000",
+        "styles": ["ellipse"],
+        "anchors": [
+            {"frame_idx": 30, "bbox": _bbox(0.5, 0.5, 0.75, 0.75)},
+            {"frame_idx": 5, "bbox": _bbox(0.0, 0.0, 0.5, 0.5)},
+        ],
+    }]}
+    [target] = parse_targets(config, 200, 100)
+    assert [a["frame_idx"] for a in target["anchors"]] == [5, 30]
+    assert target["anchors"][0]["bbox"] == (0, 0, 100, 50)
+    assert target["frame_idx"] == 5
+    assert target["bbox"] == (0, 0, 100, 50)
+
+
+def test_parse_targets_legacy_single_bbox_becomes_one_anchor():
+    config = {"targets": [{"frame_idx": 7, "bbox": _bbox(0.1, 0.1, 0.2, 0.2)}]}
+    [target] = parse_targets(config, 100, 100)
+    assert len(target["anchors"]) == 1
+    assert target["anchors"][0]["frame_idx"] == 7
+    assert target["bbox"] == target["anchors"][0]["bbox"]
+
+
+def test_parse_targets_too_many_anchors_raises():
+    anchors = [{"frame_idx": i, "bbox": _bbox(0.1, 0.1, 0.2, 0.2)} for i in range(6)]
+    config = {"targets": [{"anchors": anchors}]}
+    try:
+        parse_targets(config, 100, 100)
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "anchor" in str(e).lower()
+
+
+def test_parse_targets_anchor_degenerate_bbox_raises():
+    config = {"targets": [{"anchors": [{"frame_idx": 0, "bbox": _bbox(0.5, 0.5, 0.5, 0.5)}]}]}
+    try:
+        parse_targets(config, 100, 100)
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "area" in str(e).lower() or "bbox" in str(e).lower()
+
+
+from routers.services._config import config_lines
+
+
+def test_config_lines_multiple_with_default_labels():
+    config = {"lines": [
+        {"label": "Puerta", "start": {"x": 0.0, "y": 0.5}, "end": {"x": 1.0, "y": 0.5}},
+        {"label": "Carril", "start": {"x": 0.0, "y": 0.2}, "end": {"x": 1.0, "y": 0.2},
+         "in_label": "Norte", "out_label": "Sur"},
+    ]}
+    lines = config_lines(config, 100, 100)
+    assert len(lines) == 2
+    assert lines[0]["label"] == "Puerta"
+    assert lines[0]["in_label"] == "Entran"
+    assert lines[0]["out_label"] == "Salen"
+    assert lines[0]["start"] == (0, 50) and lines[0]["end"] == (99, 50)
+    assert lines[1]["in_label"] == "Norte" and lines[1]["out_label"] == "Sur"
+
+
+def test_config_lines_skips_degenerate():
+    config = {"lines": [{"label": "x", "start": {"x": 0.5, "y": 0.5}, "end": {"x": 0.5, "y": 0.5}}]}
+    assert config_lines(config, 100, 100) == []
+
+
+def test_config_lines_empty_when_no_lines():
+    assert config_lines({}, 100, 100) == []

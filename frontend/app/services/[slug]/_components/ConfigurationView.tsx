@@ -15,6 +15,7 @@ import type { AnalysisSegment, ConfigurableService, ProcessingConfig } from '@/l
 import { toast } from 'sonner'
 import { ZoneEditor } from './ZoneEditor'
 import { LineEditor } from './LineEditor'
+import { CountingLineEditor } from './CountingLineEditor'
 import { RoiEditor } from './RoiEditor'
 import { VideoFrameCanvas } from './VideoFrameCanvas'
 import { PreviewInspector } from './PreviewInspector'
@@ -46,6 +47,7 @@ export function ConfigurationView({
   const [config, setConfig] = useState<ProcessingConfig | null>(initialConfig)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [countMode, setCountMode] = useState<'lines' | 'zones'>('lines')
 
   const serviceKey = service.apiSlug as ConfigurableService
   const previewFrame = loadedFrame?.jobId === estimate.job_id ? loadedFrame.frame : null
@@ -144,24 +146,28 @@ export function ConfigurationView({
           {service.apiSlug === 'zone_counting' ? (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={config.mode === 'entry_exit' ? 'default' : 'outline'}
-                  onClick={() => updateZoneMode('entry_exit')}
-                >
-                  Entrada/salida
+                <Button type="button" size="sm" variant={countMode === 'lines' ? 'default' : 'outline'} onClick={() => setCountMode('lines')}>
+                  Conteo por línea
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={config.mode !== 'entry_exit' ? 'default' : 'outline'}
-                  onClick={() => updateZoneMode('inside')}
-                >
-                  Dentro de zona
+                <Button type="button" size="sm" variant={countMode === 'zones' ? 'default' : 'outline'} onClick={() => setCountMode('zones')}>
+                  Ocupación por zona
                 </Button>
               </div>
-              <ZoneEditor imageSrc={source} config={config} onChange={updateConfig} />
+              {countMode === 'zones' && (
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant={config.mode === 'entry_exit' ? 'default' : 'outline'} onClick={() => updateZoneMode('entry_exit')}>
+                    Entrada/salida
+                  </Button>
+                  <Button type="button" size="sm" variant={config.mode !== 'entry_exit' ? 'default' : 'outline'} onClick={() => updateZoneMode('inside')}>
+                    Dentro de zona
+                  </Button>
+                </div>
+              )}
+              {countMode === 'lines' ? (
+                <CountingLineEditor imageSrc={source} config={config} onChange={updateConfig} />
+              ) : (
+                <ZoneEditor imageSrc={source} config={config} onChange={updateConfig} />
+              )}
             </div>
           ) : service.apiSlug === 'traffic' ? (
             <LineEditor imageSrc={source} config={config} onChange={updateConfig} />

@@ -1,15 +1,18 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { DetectionPreviewEntry } from '@/lib/api'
 import {
+  MAX_ANCHORS_PER_TARGET,
   MAX_TRACKING_TARGETS,
+  type AnalysisSegment,
+  type TargetAnchor,
   type TrackingTarget,
 } from '@/lib/processing-config'
-import { DetectionOverlay } from './DetectionOverlay'
+import { SelectionPlayer } from './SelectionPlayer'
 import { TargetPanel } from './TargetPanel'
-import { nearestFrame, useDetectionPreview } from './useDetectionPreview'
+import { useFrameDetection } from './useFrameDetection'
 
 const PALETTE = ['#00ffcc', '#ff3366', '#ffd700', '#3399ff', '#aaff44']
 
@@ -18,6 +21,7 @@ interface Props {
   jobId: string | null
   token: string
   videoUrl: string | null
+  segment: AnalysisSegment | null
   targets: TrackingTarget[]
   onChange: (targets: TrackingTarget[]) => void
   onBack: () => void
@@ -29,21 +33,44 @@ export function TargetSelectionView({
   jobId,
   token,
   videoUrl,
+  segment,
   targets,
   onChange,
   onBack,
   onContinue,
 }: Props) {
-  const { loading, error, fps, frames, confidence, retryWithConfidence } =
-    useDetectionPreview(slug, jobId, token)
-  const [currentTime, setCurrentTime] = useState(0)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const { detections, frameIdx, fps, loading, error, detectAt, retryLowerConfidence } =
+    useFrameDetection(slug, jobId, token)
+  const [refiningTargetId, setRefiningTargetId] = useState<string | null>(null)
+  const [lastAtSec, setLastAtSec] = useState(segment?.start_sec ?? 0)
 
-  const frame = nearestFrame(frames, fps, currentTime)
+  const startFrame = Math.round((segment?.start_sec ?? 0) * fps)
 
-  function handleToggle(det: DetectionPreviewEntry, frameIdx: number) {
-    const existing = targets.find(
-      (t) => Math.abs(t.bbox.x1 - det.bbox.x1) < 0.02 && Math.abs(t.bbox.y1 - det.bbox.y1) < 0.02
+  function handleFrameSettled(atSec: number) {
+    setLastAtSec(atSec)
+    void detectAt(atSec)
+  }
+
+  function anchorFromDetection(det: DetectionPreviewEntry): TargetAnchor {
+    return { frame_idx: Math.max(0, frameIdx - startFrame), bbox: det.bbox }
+  }
+
+  function handleToggle(det: DetectionPreviewEntry) {
+    if (refiningTargetId) {
+      const target = targets.find((t) => t.id === refiningTargetId)
+      if (!target || target.anchors.length >= MAX_ANCHORS_PER_TARGET) return
+      onChange(
+        targets.map((t) =>
+          t.id === refiningTargetId ? { ...t, anchors: [...t.anchors, anchorFromDetection(det)] } : t
+        )
+      )
+      return
+    }
+
+    const existing = targets.find((t) =>
+      t.anchors.some(
+        (a) => Math.abs(a.bbox.x1 - det.bbox.x1) < 0.02 && Math.abs(a.bbox.y1 - det.bbox.y1) < 0.02
+      )
     )
     if (existing) {
       onChange(targets.filter((t) => t.id !== existing.id))
@@ -52,8 +79,7 @@ export function TargetSelectionView({
     if (targets.length >= MAX_TRACKING_TARGETS) return
     const next: TrackingTarget = {
       id: crypto.randomUUID(),
-      frame_idx: frameIdx,
-      bbox: det.bbox,
+      anchors: [anchorFromDetection(det)],
       name: `${det.class_name} ${targets.length + 1}`,
       color: PALETTE[targets.length % PALETTE.length],
       styles: ['ellipse', 'label'],
@@ -67,7 +93,19 @@ export function TargetSelectionView({
   }
 
   function removeTarget(id: string) {
+    if (refiningTargetId === id) setRefiningTargetId(null)
     onChange(targets.filter((t) => t.id !== id))
+  }
+
+  function removeAnchor(targetId: string, anchorIndex: number) {
+    const target = targets.find((t) => t.id === targetId)
+    if (!target) return
+    const nextAnchors = target.anchors.filter((_, i) => i !== anchorIndex)
+    if (nextAnchors.length === 0) {
+      removeTarget(targetId)
+      return
+    }
+    onChange(targets.map((t) => (t.id === targetId ? { ...t, anchors: nextAnchors } : t)))
   }
 
   return (
@@ -75,42 +113,22 @@ export function TargetSelectionView({
       <div>
         <h2 className="text-lg font-semibold">Selecciona objetos a seguir</h2>
         <p className="text-sm text-muted-foreground">
-          Reproduce el video y haz clic sobre los objetos que quieres rastrear. Puedes continuar sin
-          seleccionar ninguno para usar el modo automático.
+          Reproduce y pausa el video, luego haz clic sobre los objetos que quieres rastrear. Puedes
+          continuar sin seleccionar ninguno para usar el modo automático.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-2">
-          <div className="relative overflow-hidden rounded-lg border border-border bg-black">
-            <div className="flex aspect-video items-center justify-center">
-              {videoUrl ? (
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  className="h-full w-full object-contain"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                />
-              ) : (
-                <p className="px-6 text-center text-sm text-white/65">Sin video disponible</p>
-              )}
-            </div>
-            {frame && !loading && !error && (
-              <DetectionOverlay
-                detections={frame.detections}
-                targets={targets}
-                frameIdx={frame.frame_idx}
-                onToggle={handleToggle}
-              />
-            )}
-          </div>
-
-          {loading && (
-            <p className="text-sm text-muted-foreground">Analizando frames del video…</p>
-          )}
+          <SelectionPlayer
+            videoUrl={videoUrl}
+            segment={segment}
+            detections={detections}
+            targets={targets}
+            loading={loading}
+            onFrameSettled={handleFrameSettled}
+            onToggle={handleToggle}
+          />
           {error && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
               <p className="text-destructive">{error}</p>
@@ -119,21 +137,34 @@ export function TargetSelectionView({
                 size="sm"
                 variant="outline"
                 className="mt-2"
-                onClick={() => retryWithConfidence(Math.max(0.1, confidence - 0.1))}
+                onClick={() => retryLowerConfidence(lastAtSec)}
               >
                 Reintentar con menor confianza
               </Button>
             </div>
           )}
-          {!loading && !error && frames.length > 0 && !frame?.detections.length && (
+          {!loading && !error && detections.length === 0 && (
             <p className="text-sm text-amber-500">
-              No se detectaron objetos en este instante. Avanza el video o baja la confianza.
+              No se detectaron objetos en este frame. Avanza/pausa en otro instante o baja la confianza.
             </p>
           )}
         </div>
 
         <div className="space-y-3">
-          <TargetPanel targets={targets} onUpdate={updateTarget} onRemove={removeTarget} />
+          {refiningTargetId && (
+            <p className="text-sm text-brand">
+              Modo refinamiento: pausa donde se vea el objeto y haz clic sobre él para añadir un ancla.
+            </p>
+          )}
+          <TargetPanel
+            targets={targets}
+            fps={fps}
+            refiningTargetId={refiningTargetId}
+            onUpdate={updateTarget}
+            onRemove={removeTarget}
+            onRemoveAnchor={removeAnchor}
+            onToggleRefine={(id) => setRefiningTargetId((cur) => (cur === id ? null : id))}
+          />
         </div>
       </div>
 

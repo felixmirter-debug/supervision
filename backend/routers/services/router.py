@@ -57,12 +57,28 @@ class DetectionPreviewRequest(BaseModel):
     sample_fps: float = 1.0
     confidence: Optional[float] = None
     class_filter: Optional[list[str]] = None
+    start_sec: float = 0.0
+    end_sec: Optional[float] = None
 
 
 class DetectionPreviewResponse(BaseModel):
     job_id: str
     fps: float
     frames: list[dict[str, Any]]
+
+
+class DetectionAtRequest(BaseModel):
+    job_id: str
+    at_sec: float
+    confidence: Optional[float] = None
+    class_filter: Optional[list[str]] = None
+
+
+class DetectionAtResponse(BaseModel):
+    job_id: str
+    fps: float
+    frame_idx: int
+    detections: list[dict[str, Any]]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -254,10 +270,55 @@ async def detection_preview(
     from core.models import get_model
     from routers.services._preview import sample_detections, sample_frames
 
-    sampled, fps = sample_frames(result.data["input_url"], body.sample_fps)
+    sampled, fps = sample_frames(
+        result.data["input_url"], body.sample_fps,
+        start_sec=body.start_sec, end_sec=body.end_sec,
+    )
     if not sampled:
         raise HTTPException(status_code=422, detail="No frames decoded from input video")
 
     config = {"confidence": body.confidence, "class_filter": body.class_filter}
     frames = sample_detections(sampled, get_model(service), config)
     return DetectionPreviewResponse(job_id=body.job_id, fps=fps, frames=frames)
+
+
+@router.post("/{slug}/detection-at", response_model=DetectionAtResponse)
+async def detection_at(
+    slug: str,
+    body: DetectionAtRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Detecta un único frame en `at_sec` para refinar la selección con cajas
+    alineadas a ese instante exacto (refinamiento estilo SAM 3)."""
+    service = _resolve_slug(slug)
+    if service != "tracking":
+        raise HTTPException(status_code=400, detail="detection-at only supports 'tracking'")
+
+    supabase = get_supabase()
+    result = (
+        supabase.table("jobs").select("*")
+        .eq("id", body.job_id).eq("user_id", user["user_id"])
+        .single().execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if result.data["status"] != "estimating":
+        raise HTTPException(status_code=409, detail="Job already processed")
+
+    from core.models import get_model
+    from routers.services._preview import sample_detections, sample_frames
+
+    at_sec = max(0.0, body.at_sec)
+    sampled, fps = sample_frames(
+        result.data["input_url"], sample_fps=1000.0, max_frames=1, start_sec=at_sec,
+    )
+    if not sampled:
+        raise HTTPException(status_code=422, detail="No frame decoded at requested time")
+
+    config = {"confidence": body.confidence, "class_filter": body.class_filter}
+    frames = sample_detections(sampled, get_model(service), config)
+    entry = frames[0]
+    return DetectionAtResponse(
+        job_id=body.job_id, fps=fps,
+        frame_idx=entry["frame_idx"], detections=entry["detections"],
+    )

@@ -15,6 +15,8 @@ export type LineConfig = {
   start: NormalizedPoint
   end: NormalizedPoint
   direction?: 'in_out' | 'out_in'
+  in_label?: string
+  out_label?: string
 }
 
 export type RoiConfig = {
@@ -33,10 +35,14 @@ export type TargetStyle =
   | 'spotlight'
   | 'label'
 
-export type TrackingTarget = {
-  id: string
+export type TargetAnchor = {
   frame_idx: number
   bbox: { x1: number; y1: number; x2: number; y2: number }
+}
+
+export type TrackingTarget = {
+  id: string
+  anchors: TargetAnchor[]
   name: string
   color: string
   styles: TargetStyle[]
@@ -44,6 +50,7 @@ export type TrackingTarget = {
 }
 
 export const MAX_TRACKING_TARGETS = 5
+export const MAX_ANCHORS_PER_TARGET = 5
 
 export type AnalysisSegment = {
   start_sec: number

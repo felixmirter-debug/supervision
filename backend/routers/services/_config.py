@@ -126,6 +126,27 @@ def first_line(config: dict[str, Any], width: int, height: int) -> tuple[Point, 
     return None
 
 
+def config_lines(config: dict[str, Any], width: int, height: int) -> list[dict[str, Any]]:
+    """Devuelve todas las líneas como dicts con puntos en píxeles y etiquetas de
+    dirección. Omite líneas degeneradas (start == end)."""
+    out: list[dict[str, Any]] = []
+    for raw in config.get("lines") or []:
+        if not isinstance(raw, dict):
+            continue
+        start = point_to_pixel(raw.get("start"), width, height)
+        end = point_to_pixel(raw.get("end"), width, height)
+        if start == end:
+            continue
+        out.append({
+            "label": str(raw.get("label") or f"Línea {len(out) + 1}"),
+            "start": start,
+            "end": end,
+            "in_label": str(raw.get("in_label") or "Entran"),
+            "out_label": str(raw.get("out_label") or "Salen"),
+        })
+    return out
+
+
 def filter_detections(
     detections: sv.Detections,
     config: dict[str, Any],
@@ -169,6 +190,19 @@ ALLOWED_TARGET_STYLES = {
 }
 
 
+MAX_ANCHORS_PER_TARGET = 5
+
+
+def _parse_bbox(bbox: Any, width: int, height: int) -> tuple[int, int, int, int]:
+    if not isinstance(bbox, dict):
+        raise ValueError("Target bbox must be an object")
+    x1, y1 = point_to_pixel({"x": bbox.get("x1"), "y": bbox.get("y1")}, width, height)
+    x2, y2 = point_to_pixel({"x": bbox.get("x2"), "y": bbox.get("y2")}, width, height)
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("Invalid bbox: must have positive area")
+    return (x1, y1, x2, y2)
+
+
 def parse_targets(config: Optional[dict[str, Any]], width: int, height: int) -> list[dict[str, Any]]:
     """Valida y normaliza config['targets'] a pixeles. Lanza ValueError si es inválido."""
     raw_targets = (config or {}).get("targets") or []
@@ -179,22 +213,34 @@ def parse_targets(config: Optional[dict[str, Any]], width: int, height: int) -> 
     for raw in raw_targets:
         if not isinstance(raw, dict):
             raise ValueError("Each target must be an object")
-        bbox = raw.get("bbox")
-        if not isinstance(bbox, dict):
-            raise ValueError("Target bbox must be an object")
+
         styles = list(raw.get("styles") or [])
         invalid = set(styles) - ALLOWED_TARGET_STYLES
         if invalid:
             raise ValueError(f"Unknown style(s): {sorted(invalid)}")
 
-        x1, y1 = point_to_pixel({"x": bbox.get("x1"), "y": bbox.get("y1")}, width, height)
-        x2, y2 = point_to_pixel({"x": bbox.get("x2"), "y": bbox.get("y2")}, width, height)
-        if x2 <= x1 or y2 <= y1:
-            raise ValueError("Invalid bbox: must have positive area")
+        raw_anchors = raw.get("anchors")
+        if not raw_anchors:
+            raw_anchors = [{"frame_idx": raw.get("frame_idx"), "bbox": raw.get("bbox")}]
+        if not isinstance(raw_anchors, list):
+            raise ValueError("Target anchors must be a list")
+        if len(raw_anchors) > MAX_ANCHORS_PER_TARGET:
+            raise ValueError(f"Too many anchors: max {MAX_ANCHORS_PER_TARGET}")
+
+        anchors: list[dict[str, Any]] = []
+        for raw_anchor in raw_anchors:
+            if not isinstance(raw_anchor, dict):
+                raise ValueError("Each anchor must be an object")
+            anchors.append({
+                "frame_idx": max(0, int(raw_anchor.get("frame_idx") or 0)),
+                "bbox": _parse_bbox(raw_anchor.get("bbox"), width, height),
+            })
+        anchors.sort(key=lambda a: a["frame_idx"])
 
         targets.append({
-            "frame_idx": max(0, int(raw.get("frame_idx") or 0)),
-            "bbox": (x1, y1, x2, y2),
+            "anchors": anchors,
+            "frame_idx": anchors[0]["frame_idx"],
+            "bbox": anchors[0]["bbox"],
             "name": str(raw.get("name") or f"Objeto {len(targets) + 1}"),
             "color": str(raw.get("color") or "#00ffcc"),
             "styles": styles or ["box", "label"],

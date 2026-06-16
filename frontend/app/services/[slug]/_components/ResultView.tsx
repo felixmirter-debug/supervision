@@ -9,6 +9,11 @@ import { formatCredits, formatDuration } from '@/lib/formatters'
 import type { Job } from '@/lib/api'
 import { summarizeProcessingConfig } from '@/lib/processing-config'
 import { TargetMetricsCard, type TargetMetric } from './TargetMetricsCard'
+import {
+  CountingResultPanel,
+  type CountingLineMetric,
+  type CountingZoneMetric,
+} from './CountingResultPanel'
 
 interface Props {
   job: Job
@@ -22,6 +27,12 @@ function extractTargetMetrics(metrics: Record<string, unknown> | null): TargetMe
 
 export function ResultView({ job, onReset }: Props) {
   const targetMetrics = extractTargetMetrics(job.metrics)
+  const countingLines = Array.isArray(job.metrics?.lines)
+    ? (job.metrics?.lines as CountingLineMetric[])
+    : []
+  const countingZones = Array.isArray(job.metrics?.zones)
+    ? (job.metrics?.zones as CountingZoneMetric[])
+    : []
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
       <div className="space-y-5">
@@ -64,12 +75,15 @@ export function ResultView({ job, onReset }: Props) {
           </div>
         )}
         {targetMetrics.length > 0 && <TargetMetricsCard targets={targetMetrics} />}
+        {(countingLines.length > 0 || countingZones.length > 0) && (
+          <CountingResultPanel lines={countingLines} zones={countingZones} />
+        )}
         {job.metrics && (
           <div className="rounded-lg border border-border bg-card/60 p-4">
             <p className="text-sm font-semibold">Metricas</p>
             <div className="mt-3 space-y-2">
               {Object.entries(job.metrics)
-                .filter(([key]) => key !== 'targets')
+                .filter(([key]) => key !== 'targets' && key !== 'lines' && key !== 'zones')
                 .map(([key, value]) => (
                 <div key={key} className="flex justify-between gap-3 text-sm">
                   <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>

@@ -5,7 +5,9 @@ _models: dict[str, YOLO] = {}
 
 MODEL_MAP = {
     "zone_counting": "yolov8n.pt",
-    "tracking": "yolov8n.pt",
+    # Tracking usa un detector más grande por defecto: yolov8n pierde
+    # detecciones de objetos ocluidos/pequeños y eso rompe el seguimiento.
+    "tracking": os.getenv("TRACKING_MODEL_PATH", "yolov8m.pt"),
     "traffic": "yolov8n.pt",
     "ppe_detection": os.getenv("PPE_MODEL_PATH", "yolov8n.pt"),
     "quality_control": os.getenv("QC_MODEL_PATH", "yolov8n.pt"),

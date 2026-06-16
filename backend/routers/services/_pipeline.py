@@ -238,7 +238,7 @@ def process_job_background(
         credits_estimated = job["credits_estimated"]
 
         if credits_used < credits_estimated:
-            refund_credits(user_id, job_id, credits_estimated - credits_used, "job_partial_refund")
+            refund_credits(user_id, job_id, credits_estimated - credits_used, "job_refund")
 
         supabase.table("jobs").update({
             "status": "done",
@@ -255,7 +255,7 @@ def process_job_background(
         try:
             job_result = supabase.table("jobs").select("credits_estimated").eq("id", job_id).single().execute()
             if job_result.data:
-                refund_credits(user_id, job_id, job_result.data["credits_estimated"], "job_failure")
+                refund_credits(user_id, job_id, job_result.data["credits_estimated"], "job_refund")
         except Exception:
             pass
 

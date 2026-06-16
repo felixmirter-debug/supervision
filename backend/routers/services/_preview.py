@@ -17,18 +17,31 @@ CROP_MAX_SIZE = 96
 
 
 def sample_frames(path: str, sample_fps: float = DEFAULT_SAMPLE_FPS,
-                  max_frames: int = MAX_SAMPLED_FRAMES) -> tuple[list[tuple[int, np.ndarray]], float]:
-    """Devuelve [(frame_idx, frame)] muestreados y el fps del video."""
+                  max_frames: int = MAX_SAMPLED_FRAMES,
+                  start_sec: float = 0.0,
+                  end_sec: float | None = None) -> tuple[list[tuple[int, np.ndarray]], float]:
+    """Devuelve [(frame_idx, frame)] muestreados y el fps del video.
+
+    Los `frame_idx` son absolutos respecto al video completo. Si se indica un
+    segmento (`start_sec`/`end_sec`) el muestreo se limita a esa franja —
+    análogo a `_read_frames` del pipeline— para no analizar zonas descartadas
+    (p. ej. una intro en negro)."""
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     step = max(1, int(round(fps / sample_fps)))
+    start_frame = max(0, int(round(start_sec * fps)))
+    end_frame = int(round(end_sec * fps)) if end_sec else None
+    if start_sec > 0:
+        cap.set(cv2.CAP_PROP_POS_MSEC, start_sec * 1000)
     sampled: list[tuple[int, np.ndarray]] = []
-    idx = 0
+    idx = start_frame
     while cap.isOpened() and len(sampled) < max_frames:
         ok, frame = cap.read()
         if not ok:
             break
-        if idx % step == 0:
+        if end_frame is not None and idx > end_frame:
+            break
+        if (idx - start_frame) % step == 0:
             sampled.append((idx, frame))
         idx += 1
     cap.release()

@@ -12,6 +12,36 @@ from routers.services._config import filter_detections, parse_targets, summarize
 from routers.services._reid import TargetMatcher, appearance_embedding
 
 
+# Tracking robustness knobs.
+# ByteTrack: retener tracks perdidos más tiempo y aceptar detecciones algo más
+# débiles para no soltar el objeto ante oclusiones breves.
+_LOST_TRACK_BUFFER = 90
+_TRACK_ACTIVATION_THRESHOLD = 0.2
+_MIN_MATCHING_THRESHOLD = 0.85
+# Cuántos frames seguir dibujando el resaltado en la última posición conocida
+# cuando el detector pierde el objeto momentáneamente.
+_HOLD_FRAMES = 15
+
+
+def _build_tracker() -> sv.ByteTrack:
+    return sv.ByteTrack(
+        track_activation_threshold=_TRACK_ACTIVATION_THRESHOLD,
+        lost_track_buffer=_LOST_TRACK_BUFFER,
+        minimum_matching_threshold=_MIN_MATCHING_THRESHOLD,
+    )
+
+
+def _single_detection(bbox: tuple[int, int, int, int], stable_id: int) -> sv.Detections:
+    """Construye una Detections de un solo box con un tracker_id estable por
+    target, para que cada trace por target sea continuo pese al churn de IDs."""
+    return sv.Detections(
+        xyxy=np.array([list(bbox)], dtype=float),
+        confidence=np.array([1.0], dtype=float),
+        class_id=np.array([0], dtype=int),
+        tracker_id=np.array([stable_id], dtype=int),
+    )
+
+
 def _iou(a: np.ndarray, b: tuple[int, int, int, int]) -> float:
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
@@ -36,7 +66,7 @@ def _process_legacy(
     config: dict,
 ) -> tuple[list[np.ndarray], dict]:
     """Multi-object tracking with ByteTrack and trace visualization."""
-    tracker = sv.ByteTrack()
+    tracker = _build_tracker()
     trace_annotator = sv.TraceAnnotator()
     label_annotator = sv.LabelAnnotator()
     box_annotator = sv.BoxAnnotator()
@@ -74,21 +104,33 @@ def _process_legacy(
 def _process_with_targets(frames, model, config, targets):
     h, w = frames[0].shape[:2]
     frame_diag = float((w ** 2 + h ** 2) ** 0.5)
-    tracker = sv.ByteTrack()
+    tracker = _build_tracker()
     matcher = TargetMatcher()
     annotators = [build_annotators(t) for t in targets]
 
-    # Registrar embedding inicial de cada target desde su frame de selección
+    # Registrar embedding inicial de cada target desde su primera ancla
     for idx, target in enumerate(targets):
-        ref_frame = frames[min(target["frame_idx"], len(frames) - 1)]
-        matcher.register(idx, appearance_embedding(ref_frame, target["bbox"]))
+        first = target["anchors"][0]
+        local = min(max(0, first["frame_idx"]), len(frames) - 1)
+        matcher.register(idx, appearance_embedding(frames[local], first["bbox"]))
 
-    stats = [{"frames_visible": 0, "distance_px": 0.0, "last_center": None} for _ in targets]
-    pending_init = {i: t["bbox"] for i, t in enumerate(targets)}
+    # Mapa de anclas por frame local: {idx_local: [(target_idx, bbox), ...]}
+    anchors_by_frame: dict[int, list[tuple[int, tuple[int, int, int, int]]]] = {}
+    for idx, target in enumerate(targets):
+        for anchor in target["anchors"]:
+            local = min(max(0, anchor["frame_idx"]), len(frames) - 1)
+            anchors_by_frame.setdefault(local, []).append((idx, anchor["bbox"]))
+
+    stats = [
+        {"frames_visible": 0, "held_frames": 0, "distance_px": 0.0,
+         "last_center": None, "last_bbox": None, "missed": _HOLD_FRAMES + 1}
+        for _ in targets
+    ]
+    pending_init = {i: t["anchors"][0]["bbox"] for i, t in enumerate(targets)}
     active_tracks: set[int] = set()
     annotated: list[np.ndarray] = []
 
-    for frame in frames:
+    for frame_i, frame in enumerate(frames):
         result = model(frame, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(result)
         detections = filter_detections(detections, config, result.names, frame.shape)
@@ -99,9 +141,26 @@ def _process_with_targets(frames, model, config, targets):
             matcher.mark_lost(lost_id)
         active_tracks = current_ids
 
-        target_boxes: list[tuple[int, int, int, int]] = []
+        # Re-bind dirigido por anclas en este frame
+        for target_idx, anchor_bbox in anchors_by_frame.get(frame_i, []):
+            best_det, best_iou = None, 0.3
+            if detections.tracker_id is not None:
+                for det_i, track_id in enumerate(detections.tracker_id.tolist()):
+                    iou = _iou(detections.xyxy[det_i], anchor_bbox)
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_det = (det_i, int(track_id))
+            if best_det is not None:
+                det_i, track_id = best_det
+                bbox = tuple(int(v) for v in detections.xyxy[det_i])
+                matcher.bind(target_idx, track_id, bbox)
+                matcher.update_embedding(target_idx, appearance_embedding(frame, bbox))
+                pending_init.pop(target_idx, None)
+                stats[target_idx]["missed"] = 0
+                stats[target_idx]["last_bbox"] = bbox
+
         scene = frame.copy()
-        per_target_detections: dict[int, sv.Detections] = {}
+        seen: dict[int, tuple[int, int, int, int]] = {}
 
         if detections.tracker_id is not None:
             for det_i, track_id in enumerate(detections.tracker_id.tolist()):
@@ -122,24 +181,40 @@ def _process_with_targets(frames, model, config, targets):
                     emb = appearance_embedding(frame, bbox)
                     target_idx = matcher.match_new_track(emb, bbox, int(track_id), frame_diag)
 
-                if target_idx is None:
+                if target_idx is None or target_idx in seen:
                     continue
 
                 matcher.update_embedding(target_idx, appearance_embedding(frame, bbox))
                 matcher.update_last_bbox(target_idx, bbox)
-                per_target_detections[target_idx] = detections[det_i:det_i + 1]
-                target_boxes.append(bbox)
+                seen[target_idx] = bbox
 
                 s = stats[target_idx]
                 cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
                 if s["last_center"] is not None:
                     s["distance_px"] += float(((cx - s["last_center"][0]) ** 2 + (cy - s["last_center"][1]) ** 2) ** 0.5)
                 s["last_center"] = (cx, cy)
+                s["last_bbox"] = bbox
+                s["missed"] = 0
                 s["frames_visible"] += 1
 
+        # Hold-through-gaps: mantener el resaltado en la última posición conocida
+        # durante huecos cortos del detector para que el objeto no parpadee.
+        render: list[tuple[int, tuple[int, int, int, int], bool]] = [
+            (idx, bbox, False) for idx, bbox in seen.items()
+        ]
+        for target_idx, s in enumerate(stats):
+            if target_idx in seen:
+                continue
+            s["missed"] += 1
+            if s["missed"] <= _HOLD_FRAMES and s["last_bbox"] is not None:
+                s["held_frames"] += 1
+                render.append((target_idx, s["last_bbox"], True))
+
+        target_boxes = [bbox for _, bbox, _ in render]
         if target_boxes and any("spotlight" in t["styles"] for t in targets):
             scene = apply_spotlight(scene, target_boxes)
-        for target_idx, dets in per_target_detections.items():
+        for target_idx, bbox, _held in render:
+            dets = _single_detection(bbox, target_idx + 1)
             scene = annotate_target(scene, dets, targets[target_idx], annotators[target_idx])
         annotated.append(scene)
 

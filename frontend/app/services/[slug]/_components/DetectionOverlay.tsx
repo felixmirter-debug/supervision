@@ -11,9 +11,11 @@ interface Props {
 }
 
 function isSelected(det: DetectionPreviewEntry, targets: TrackingTarget[]): boolean {
-  return targets.some(
-    (t) =>
-      Math.abs(t.bbox.x1 - det.bbox.x1) < 0.02 && Math.abs(t.bbox.y1 - det.bbox.y1) < 0.02
+  return targets.some((t) =>
+    t.anchors.some(
+      (a) =>
+        Math.abs(a.bbox.x1 - det.bbox.x1) < 0.02 && Math.abs(a.bbox.y1 - det.bbox.y1) < 0.02
+    )
   )
 }
 
