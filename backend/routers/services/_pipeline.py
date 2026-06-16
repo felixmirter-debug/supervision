@@ -17,7 +17,7 @@ from core.credits import estimate_cost, get_service_pricing, refund_credits
 from core.db import get_supabase
 from core.models import get_model
 from routers.services._config import analysis_segment
-from routers.services._processors import get_processor
+from routers.services.processors import get_processor
 
 
 def _read_frames(

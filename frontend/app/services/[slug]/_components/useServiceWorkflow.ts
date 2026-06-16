@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { estimateService, getJob, processService, type EstimateResult, type Job } from '@/lib/api'
 import { getService, type ServiceConfig } from '@/lib/services'
-import type { AnalysisSegment, ProcessingConfig } from '@/lib/processing-config'
+import type { AnalysisSegment, ProcessingConfig, TrackingTarget } from '@/lib/processing-config'
 import { useAuthStore } from '@/stores/auth-store'
 import type { InputType } from './InputSelector'
 import type { ServiceStage } from './ServiceStagePanel'
@@ -23,6 +23,7 @@ export function useServiceWorkflow(slug: string) {
   const [processingConfig, setProcessingConfig] = useState<ProcessingConfig | null>(null)
   const [reviewSource, setReviewSource] = useState<VideoReviewSource | null>(null)
   const [analysisSegment, setAnalysisSegment] = useState<AnalysisSegment | null>(null)
+  const [targets, setTargets] = useState<TrackingTarget[]>([])
   const reviewObjectUrlRef = useRef<string | null>(null)
   const token = session?.access_token ?? ''
 
@@ -130,9 +131,14 @@ export function useServiceWorkflow(slug: string) {
     if (!estimate) return
     setConfirmLoading(true)
     try {
+      // El backend ignora `id` y `cropB64`; se omiten para enviar un payload limpio.
+      const apiTargets = targets.map(({ id: _id, cropB64: _crop, ...rest }) => rest)
+      const configToSend: ProcessingConfig | undefined = targets.length > 0 && processingConfig
+        ? { ...processingConfig, targets: apiTargets as ProcessingConfig['targets'] }
+        : processingConfig ?? undefined
       const res = await processService(
         slug,
-        { job_id: estimate.job_id, confirmed: true, processing_config: processingConfig ?? undefined },
+        { job_id: estimate.job_id, confirmed: true, processing_config: configToSend },
         token
       )
       setJobId(res.job_id)
@@ -170,6 +176,7 @@ export function useServiceWorkflow(slug: string) {
     setErrorMsg(null)
     setProcessingConfig(null)
     setAnalysisSegment(null)
+    setTargets([])
     replaceReviewSource(null)
     updateUrl('idle')
   }
@@ -177,8 +184,20 @@ export function useServiceWorkflow(slug: string) {
   function handleReviewed(segment: AnalysisSegment) {
     setAnalysisSegment(segment)
     setProcessingConfig((current) => current ? { ...current, analysis_segment: segment } : current)
+    const nextStage: ServiceStage = service?.apiSlug === 'tracking' ? 'selecting' : 'configuring'
+    setStage(nextStage)
+    if (estimate) updateUrl(nextStage, estimate.job_id)
+  }
+
+  function handleTargetsContinue() {
     setStage('configuring')
     if (estimate) updateUrl('configuring', estimate.job_id)
+  }
+
+  function handleBackFromConfig() {
+    const nextStage: ServiceStage = service?.apiSlug === 'tracking' ? 'selecting' : 'reviewing'
+    setStage(nextStage)
+    if (estimate) updateUrl(nextStage, estimate.job_id)
   }
 
   function handleBackToReview() {
@@ -205,10 +224,14 @@ export function useServiceWorkflow(slug: string) {
     processingConfig,
     reviewSource,
     analysisSegment,
+    targets,
     ready: Boolean(service && session && profile),
     handleInput,
     handleReviewed,
     handleBackToReview,
+    handleTargetsChange: setTargets,
+    handleTargetsContinue,
+    handleBackFromConfig,
     handleConfigured,
     handleConfirm,
     handleDone,

@@ -7,6 +7,17 @@ def estimate_cost(duration_sec: float, credits_per_sec: float) -> int:
     return math.ceil(duration_sec * credits_per_sec)
 
 
+# Recargo por Re-ID de apariencia en tracking interactivo.
+# Ajustar tras medir costos reales de cómputo en Modal.
+REID_COST_MULTIPLIER = 1.3
+
+
+def apply_reid_multiplier(credits: int, has_targets: bool) -> int:
+    if not has_targets:
+        return credits
+    return int(round(credits * REID_COST_MULTIPLIER))
+
+
 def get_service_pricing(service: str) -> dict:
     """Fetch pricing for a service from DB. Raises ValueError if not found/inactive."""
     supabase = get_supabase()

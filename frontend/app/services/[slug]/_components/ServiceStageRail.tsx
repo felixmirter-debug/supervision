@@ -1,7 +1,7 @@
 import { Check, Circle, Settings2 } from 'lucide-react'
 import type { ServiceStage } from './ServiceStagePanel'
 
-const STAGES: Array<{ value: ServiceStage; label: string }> = [
+const BASE_STAGES: Array<{ value: ServiceStage; label: string }> = [
   { value: 'idle', label: 'Entrada' },
   { value: 'reviewing', label: 'Revisar' },
   { value: 'configuring', label: 'Configurar' },
@@ -10,12 +10,21 @@ const STAGES: Array<{ value: ServiceStage; label: string }> = [
   { value: 'done', label: 'Resultado' },
 ]
 
-export function ServiceStageRail({ stage }: { stage: ServiceStage }) {
-  const stageIndex = Math.max(0, STAGES.findIndex((item) => item.value === stage))
+const SELECTING_STAGE: { value: ServiceStage; label: string } = {
+  value: 'selecting',
+  label: 'Selección',
+}
+
+export function ServiceStageRail({ stage, apiSlug }: { stage: ServiceStage; apiSlug?: string }) {
+  const stages =
+    apiSlug === 'tracking'
+      ? [...BASE_STAGES.slice(0, 2), SELECTING_STAGE, ...BASE_STAGES.slice(2)]
+      : BASE_STAGES
+  const stageIndex = Math.max(0, stages.findIndex((item) => item.value === stage))
 
   return (
     <section className="surface-panel rounded-lg p-4">
-      {STAGES.map((item, index) => {
+      {stages.map((item, index) => {
         const complete = index < stageIndex
         const active = index === stageIndex
 

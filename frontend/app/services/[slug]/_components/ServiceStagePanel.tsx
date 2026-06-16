@@ -5,15 +5,17 @@ import { ProcessingView } from './ProcessingView'
 import { ResultView } from './ResultView'
 import { ConfigurationView } from './ConfigurationView'
 import { VideoReviewView, type VideoReviewSource } from './VideoReviewView'
+import { TargetSelectionView } from './TargetSelectionView'
 import type { InputType } from './InputSelector'
 import type { EstimateResult, Job } from '@/lib/api'
 import type { ServiceConfig } from '@/lib/services'
-import type { AnalysisSegment, ProcessingConfig } from '@/lib/processing-config'
+import type { AnalysisSegment, ProcessingConfig, TrackingTarget } from '@/lib/processing-config'
 
 export type ServiceStage =
   | 'idle'
   | 'estimating'
   | 'reviewing'
+  | 'selecting'
   | 'configuring'
   | 'confirming'
   | 'processing'
@@ -31,9 +33,13 @@ interface Props {
   processingConfig: ProcessingConfig | null
   reviewSource: VideoReviewSource | null
   analysisSegment: AnalysisSegment | null
+  targets: TrackingTarget[]
   onInput: (type: InputType, file?: File, url?: string) => void
   onReviewed: (segment: AnalysisSegment) => void
   onBackToReview: () => void
+  onTargetsChange: (targets: TrackingTarget[]) => void
+  onTargetsContinue: () => void
+  onBackFromConfig: () => void
   onConfigured: (config: ProcessingConfig) => void
   onDone: (job: Job) => void
   onFailed: (job: Job) => void
@@ -51,9 +57,13 @@ export function ServiceStagePanel({
   processingConfig,
   reviewSource,
   analysisSegment,
+  targets,
   onInput,
   onReviewed,
   onBackToReview,
+  onTargetsChange,
+  onTargetsContinue,
+  onBackFromConfig,
   onConfigured,
   onDone,
   onFailed,
@@ -77,6 +87,21 @@ export function ServiceStagePanel({
     )
   }
 
+  if (stage === 'selecting' && estimate) {
+    return (
+      <TargetSelectionView
+        slug={service.apiSlug}
+        jobId={estimate.job_id}
+        token={token}
+        videoUrl={reviewSource?.src ?? null}
+        targets={targets}
+        onChange={onTargetsChange}
+        onBack={onBackToReview}
+        onContinue={onTargetsContinue}
+      />
+    )
+  }
+
   if (stage === 'configuring' && estimate) {
     return (
       <ConfigurationView
@@ -86,7 +111,7 @@ export function ServiceStagePanel({
         initialConfig={processingConfig}
         analysisSegment={analysisSegment}
         onContinue={onConfigured}
-        onCancel={onBackToReview}
+        onCancel={onBackFromConfig}
       />
     )
   }

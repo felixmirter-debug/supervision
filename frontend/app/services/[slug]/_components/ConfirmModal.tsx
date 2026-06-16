@@ -37,7 +37,10 @@ export function ConfirmModal({
   if (!estimate) return null
 
   const selectedDuration = segmentDuration(processingConfig?.analysis_segment) || estimate.duration_sec
-  const selectedCredits = Math.ceil(selectedDuration * estimate.credits_per_sec)
+  const baseCredits = Math.ceil(selectedDuration * estimate.credits_per_sec)
+  const targetCount = processingConfig?.targets?.length ?? 0
+  const hasTargets = targetCount > 0
+  const selectedCredits = hasTargets ? Math.round(baseCredits * 1.3) : baseCredits
   const enough = userCredits >= selectedCredits
   const shortfall = selectedCredits - userCredits
 
@@ -60,6 +63,14 @@ export function ConfirmModal({
             <span className="text-muted-foreground">Tarifa</span>
             <span className="font-mono">{estimate.credits_per_sec} cr/s</span>
           </div>
+          {hasTargets && (
+            <div className="flex justify-between rounded-md bg-muted/60 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Seguimiento personalizado de {targetCount} objeto(s) — recargo Re-ID ×1.3
+              </span>
+              <span className="font-mono">{formatCredits(baseCredits)} → {formatCredits(selectedCredits)}</span>
+            </div>
+          )}
           <div className="flex justify-between rounded-md border border-brand-border bg-brand-soft px-3 py-3 text-sm font-semibold">
             <span>Costo estimado</span>
             <span className="flex items-center gap-1 text-brand">

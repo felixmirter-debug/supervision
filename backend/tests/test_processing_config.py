@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from routers.services._config import (
@@ -7,6 +8,9 @@ from routers.services._config import (
     first_line,
     point_to_pixel,
     summarize_config,
+    parse_targets,
+    ALLOWED_TARGET_STYLES,
+    MAX_TARGETS,
 )
 
 
@@ -85,3 +89,65 @@ def test_analysis_duration_uses_selected_segment():
         {"analysis_segment": {"start_sec": 4, "end_sec": 9}},
         full_duration=30,
     ) == 5
+
+
+def test_parse_targets_empty_config():
+    assert parse_targets({}, 1920, 1080) == []
+    assert parse_targets({"targets": None}, 1920, 1080) == []
+
+
+def test_parse_targets_normalizes_and_validates():
+    config = {"targets": [{
+        "frame_idx": 12,
+        "bbox": {"x1": 0.1, "y1": 0.2, "x2": 0.3, "y2": 0.5},
+        "name": "Messi #10",
+        "color": "#00ffcc",
+        "styles": ["ellipse", "trace", "label"],
+    }]}
+    targets = parse_targets(config, 1000, 800)
+    assert len(targets) == 1
+    t = targets[0]
+    assert t["frame_idx"] == 12
+    assert t["bbox"] == (100, 160, 300, 400)  # pixeles, x1<x2, y1<y2
+    assert t["name"] == "Messi #10"
+    assert t["color"] == "#00ffcc"
+    assert t["styles"] == ["ellipse", "trace", "label"]
+
+
+def test_parse_targets_rejects_invalid():
+    many = {"targets": [{"frame_idx": 0, "bbox": {"x1": 0, "y1": 0, "x2": 0.1, "y2": 0.1},
+                         "name": f"t{i}", "color": "#fff", "styles": ["box"]}
+                        for i in range(MAX_TARGETS + 1)]}
+    with pytest.raises(ValueError, match="max"):
+        parse_targets(many, 100, 100)
+    bad_style = {"targets": [{"frame_idx": 0, "bbox": {"x1": 0, "y1": 0, "x2": 0.1, "y2": 0.1},
+                              "name": "a", "color": "#fff", "styles": ["sparkles"]}]}
+    with pytest.raises(ValueError, match="style"):
+        parse_targets(bad_style, 100, 100)
+    bad_bbox = {"targets": [{"frame_idx": 0, "bbox": {"x1": 0.5, "y1": 0.5, "x2": 0.5, "y2": 0.5},
+                             "name": "a", "color": "#fff", "styles": ["box"]}]}
+    with pytest.raises(ValueError, match="bbox"):
+        parse_targets(bad_bbox, 100, 100)
+
+
+def test_parse_targets_non_dict_target_raises():
+    with pytest.raises(ValueError, match="object"):
+        parse_targets({"targets": ["not a dict"]}, 100, 100)
+
+
+def test_parse_targets_non_dict_bbox_raises():
+    with pytest.raises(ValueError, match="bbox"):
+        parse_targets({"targets": [{"frame_idx": 0, "bbox": [0, 0, 10, 10],
+                                    "name": "a", "color": "#fff", "styles": ["box"]}]}, 100, 100)
+
+
+def test_parse_targets_negative_frame_idx_clamps_to_zero():
+    config = {"targets": [{
+        "frame_idx": -5,
+        "bbox": {"x1": 0.1, "y1": 0.1, "x2": 0.5, "y2": 0.5},
+        "name": "a",
+        "color": "#fff",
+        "styles": ["box"],
+    }]}
+    targets = parse_targets(config, 100, 100)
+    assert targets[0]["frame_idx"] == 0

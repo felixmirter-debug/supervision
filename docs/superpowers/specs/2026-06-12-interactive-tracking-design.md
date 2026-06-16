@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-06-12
 **Servicio afectado:** `tracking` (mejora del servicio existente, no es un servicio nuevo)
-**Estado:** Aprobado en brainstorming, pendiente de plan de implementación
+**Estado:** Implementado (backend + frontend; 44 tests backend en verde, TypeScript sin errores)
 
 ## Objetivo
 

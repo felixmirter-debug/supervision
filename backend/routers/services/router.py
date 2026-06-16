@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from pydantic import BaseModel
 
 from core.auth import get_current_user
-from core.credits import estimate_cost, get_service_pricing, reserve_credits
+from core.credits import apply_reid_multiplier, estimate_cost, get_service_pricing, reserve_credits
 from core.db import get_supabase
 from routers.services._config import analysis_duration
 from routers.services._pipeline import process_job_background
@@ -50,6 +50,19 @@ class ProcessRequest(BaseModel):
 class ProcessResponse(BaseModel):
     job_id: str
     status: str
+
+
+class DetectionPreviewRequest(BaseModel):
+    job_id: str
+    sample_fps: float = 1.0
+    confidence: Optional[float] = None
+    class_filter: Optional[list[str]] = None
+
+
+class DetectionPreviewResponse(BaseModel):
+    job_id: str
+    fps: float
+    frames: list[dict[str, Any]]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -176,6 +189,17 @@ async def process(
     pricing = get_service_pricing(service)
     duration = analysis_duration(body.processing_config, float(job.get("duration_sec") or 0))
     credits_estimated = estimate_cost(duration, float(pricing["credits_per_sec"]))
+
+    has_targets = bool((body.processing_config or {}).get("targets"))
+    if has_targets:
+        from routers.services._config import parse_targets
+        cfg = body.processing_config or {}
+        try:
+            parse_targets(cfg, int(cfg.get("frame_width") or 1920), int(cfg.get("frame_height") or 1080))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    credits_estimated = apply_reid_multiplier(credits_estimated, has_targets)
+
     if user["credits"] < credits_estimated:
         raise HTTPException(
             status_code=402,
@@ -204,3 +228,36 @@ async def process(
     )
 
     return ProcessResponse(job_id=body.job_id, status="processing")
+
+
+@router.post("/{slug}/detection-preview", response_model=DetectionPreviewResponse)
+async def detection_preview(
+    slug: str,
+    body: DetectionPreviewRequest,
+    user: dict = Depends(get_current_user),
+):
+    service = _resolve_slug(slug)
+    if service != "tracking":
+        raise HTTPException(status_code=400, detail="detection-preview only supports 'tracking'")
+
+    supabase = get_supabase()
+    result = (
+        supabase.table("jobs").select("*")
+        .eq("id", body.job_id).eq("user_id", user["user_id"])
+        .single().execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if result.data["status"] != "estimating":
+        raise HTTPException(status_code=409, detail="Job already processed")
+
+    from core.models import get_model
+    from routers.services._preview import sample_detections, sample_frames
+
+    sampled, fps = sample_frames(result.data["input_url"], body.sample_fps)
+    if not sampled:
+        raise HTTPException(status_code=422, detail="No frames decoded from input video")
+
+    config = {"confidence": body.confidence, "class_filter": body.class_filter}
+    frames = sample_detections(sampled, get_model(service), config)
+    return DetectionPreviewResponse(job_id=body.job_id, fps=fps, frames=frames)

@@ -158,3 +158,45 @@ def filter_detections(
         mask &= roi_mask
 
     return detections[mask]
+
+
+# ── Tracking targets ──────────────────────────────────────────────────────────
+
+MAX_TARGETS = 5
+
+ALLOWED_TARGET_STYLES = {
+    "box", "ellipse", "triangle", "halo", "color", "trace", "spotlight", "label",
+}
+
+
+def parse_targets(config: Optional[dict[str, Any]], width: int, height: int) -> list[dict[str, Any]]:
+    """Valida y normaliza config['targets'] a pixeles. Lanza ValueError si es inválido."""
+    raw_targets = (config or {}).get("targets") or []
+    if len(raw_targets) > MAX_TARGETS:
+        raise ValueError(f"Too many targets: max {MAX_TARGETS}")
+
+    targets: list[dict[str, Any]] = []
+    for raw in raw_targets:
+        if not isinstance(raw, dict):
+            raise ValueError("Each target must be an object")
+        bbox = raw.get("bbox")
+        if not isinstance(bbox, dict):
+            raise ValueError("Target bbox must be an object")
+        styles = list(raw.get("styles") or [])
+        invalid = set(styles) - ALLOWED_TARGET_STYLES
+        if invalid:
+            raise ValueError(f"Unknown style(s): {sorted(invalid)}")
+
+        x1, y1 = point_to_pixel({"x": bbox.get("x1"), "y": bbox.get("y1")}, width, height)
+        x2, y2 = point_to_pixel({"x": bbox.get("x2"), "y": bbox.get("y2")}, width, height)
+        if x2 <= x1 or y2 <= y1:
+            raise ValueError("Invalid bbox: must have positive area")
+
+        targets.append({
+            "frame_idx": max(0, int(raw.get("frame_idx") or 0)),
+            "bbox": (x1, y1, x2, y2),
+            "name": str(raw.get("name") or f"Objeto {len(targets) + 1}"),
+            "color": str(raw.get("color") or "#00ffcc"),
+            "styles": styles or ["box", "label"],
+        })
+    return targets

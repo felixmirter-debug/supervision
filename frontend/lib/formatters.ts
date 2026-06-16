@@ -2,6 +2,10 @@ export function formatCredits(amount: number): string {
   return new Intl.NumberFormat('en-US').format(amount) + ' cr'
 }
 
+export function formatPercent(fraction: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 0 }).format(fraction)
+}
+
 export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`
   const m = Math.floor(seconds / 60)

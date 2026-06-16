@@ -49,7 +49,7 @@ function ServiceContent({ params }: { params: Promise<{ slug: string }> }) {
             </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">{flow.service.description}</p>
           </section>
-          <ServiceStageRail stage={flow.stage} />
+          <ServiceStageRail stage={flow.stage} apiSlug={flow.service.apiSlug} />
         </aside>
         <section className={reviewing ? 'surface-panel min-h-[760px] rounded-lg p-4' : 'surface-panel min-h-[620px] rounded-lg p-5'}>
           <ServiceStagePanel
@@ -63,9 +63,13 @@ function ServiceContent({ params }: { params: Promise<{ slug: string }> }) {
             processingConfig={flow.processingConfig}
             reviewSource={flow.reviewSource}
             analysisSegment={flow.analysisSegment}
+            targets={flow.targets}
             onInput={flow.handleInput}
             onReviewed={flow.handleReviewed}
             onBackToReview={flow.handleBackToReview}
+            onTargetsChange={flow.handleTargetsChange}
+            onTargetsContinue={flow.handleTargetsContinue}
+            onBackFromConfig={flow.handleBackFromConfig}
             onConfigured={flow.handleConfigured}
             onDone={flow.handleDone}
             onFailed={flow.handleFailed}

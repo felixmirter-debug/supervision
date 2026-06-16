@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketState
 from core.credits import estimate_cost, get_service_pricing
 from core.db import get_supabase
 from core.models import get_model
-from routers.services._processors import get_processor
+from routers.services.processors import get_processor
 
 router = APIRouter()
 

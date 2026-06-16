@@ -2,25 +2,28 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from routers.services import _processors
+import supervision as sv
+
+from routers.services.processors import process_traffic
+from routers.services.processors import traffic as _traffic_module
 
 
 def test_process_traffic_annotates_line_zone(monkeypatch):
     def fake_from_ultralytics(_result):
-        return _processors.sv.Detections.empty()
+        return sv.Detections.empty()
 
     def fake_model(frame, verbose=False):
         assert verbose is False
         return [SimpleNamespace(names={})]
 
     monkeypatch.setattr(
-        _processors.sv.Detections,
+        sv.Detections,
         "from_ultralytics",
         fake_from_ultralytics,
     )
 
     frames = [np.zeros((120, 160, 3), dtype=np.uint8)]
-    annotated, metrics = _processors.process_traffic(
+    annotated, metrics = process_traffic(
         frames=frames,
         model=fake_model,
         config={

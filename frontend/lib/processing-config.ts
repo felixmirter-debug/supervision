@@ -23,6 +23,28 @@ export type RoiConfig = {
   points: NormalizedPoint[]
 }
 
+export type TargetStyle =
+  | 'box'
+  | 'ellipse'
+  | 'triangle'
+  | 'halo'
+  | 'color'
+  | 'trace'
+  | 'spotlight'
+  | 'label'
+
+export type TrackingTarget = {
+  id: string
+  frame_idx: number
+  bbox: { x1: number; y1: number; x2: number; y2: number }
+  name: string
+  color: string
+  styles: TargetStyle[]
+  cropB64?: string
+}
+
+export const MAX_TRACKING_TARGETS = 5
+
 export type AnalysisSegment = {
   start_sec: number
   end_sec: number
@@ -39,6 +61,7 @@ export type ProcessingConfig = {
   rois?: RoiConfig[]
   mode?: 'inside' | 'entry_exit'
   analysis_segment?: AnalysisSegment
+  targets?: TrackingTarget[]
 }
 
 export type ConfigurableService =

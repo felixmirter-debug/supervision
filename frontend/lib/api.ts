@@ -112,6 +112,24 @@ export type PreviewResult = {
   sampled_frames: number
 }
 
+export type DetectionPreviewEntry = {
+  bbox: { x1: number; y1: number; x2: number; y2: number }
+  class_name: string
+  confidence: number
+  crop_b64: string
+}
+
+export type DetectionPreviewFrame = {
+  frame_idx: number
+  detections: DetectionPreviewEntry[]
+}
+
+export type DetectionPreviewResult = {
+  job_id: string
+  fps: number
+  frames: DetectionPreviewFrame[]
+}
+
 export type Claim = {
   id: string
   user_id: string
@@ -217,6 +235,18 @@ export function processService(
 ): Promise<{ job_id: string; status: string }> {
   return apiFetch(
     `/services/${slug}/process`,
+    { method: 'POST', body: JSON.stringify(body) },
+    token
+  )
+}
+
+export function getDetectionPreview(
+  slug: string,
+  body: { job_id: string; sample_fps?: number; confidence?: number },
+  token: string
+): Promise<DetectionPreviewResult> {
+  return apiFetch<DetectionPreviewResult>(
+    `/services/${slug}/detection-preview`,
     { method: 'POST', body: JSON.stringify(body) },
     token
   )

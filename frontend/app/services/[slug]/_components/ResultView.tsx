@@ -8,13 +8,20 @@ import { cn } from '@/lib/utils'
 import { formatCredits, formatDuration } from '@/lib/formatters'
 import type { Job } from '@/lib/api'
 import { summarizeProcessingConfig } from '@/lib/processing-config'
+import { TargetMetricsCard, type TargetMetric } from './TargetMetricsCard'
 
 interface Props {
   job: Job
   onReset: () => void
 }
 
+function extractTargetMetrics(metrics: Record<string, unknown> | null): TargetMetric[] {
+  const raw = metrics?.targets
+  return Array.isArray(raw) ? (raw as TargetMetric[]) : []
+}
+
 export function ResultView({ job, onReset }: Props) {
+  const targetMetrics = extractTargetMetrics(job.metrics)
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
       <div className="space-y-5">
@@ -56,11 +63,14 @@ export function ResultView({ job, onReset }: Props) {
             <p className="mt-2 font-medium">{summarizeProcessingConfig(job.processing_config)}</p>
           </div>
         )}
+        {targetMetrics.length > 0 && <TargetMetricsCard targets={targetMetrics} />}
         {job.metrics && (
           <div className="rounded-lg border border-border bg-card/60 p-4">
             <p className="text-sm font-semibold">Metricas</p>
             <div className="mt-3 space-y-2">
-              {Object.entries(job.metrics).map(([key, value]) => (
+              {Object.entries(job.metrics)
+                .filter(([key]) => key !== 'targets')
+                .map(([key, value]) => (
                 <div key={key} className="flex justify-between gap-3 text-sm">
                   <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span>
                   <Badge variant="secondary" className="max-w-36 truncate font-mono text-xs">
